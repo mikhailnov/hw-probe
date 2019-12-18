@@ -7,25 +7,172 @@ This file explains how to install and setup environment for the tool in your com
 
 See more info in the [README.md](https://github.com/linuxhw/hw-probe/).
 
+
 Contents
 --------
 
 * [ Run without Installing ](#run-without-installing)
-* [ Install from Source    ](#install-from-source)
+* [ Command line to Run    ](#command-line-to-run)
 * [ Install on Ubuntu      ](#install-on-ubuntu)
 * [ Install on Debian      ](#install-on-debian)
 * [ Install on openSUSE    ](#install-on-opensuse)
+* [ Install on Manjaro     ](#install-on-manjaro)
 * [ Install on Arch Linux  ](#install-on-arch-linux)
 * [ Install on Fedora      ](#install-on-fedora)
 * [ Install on CentOS 7    ](#install-on-centos-7)
 * [ Install on CentOS 6    ](#install-on-centos-6)
-* [ Build Debian package   ](#build-debian-package)
-
+* [ Install on RHEL 7      ](#install-on-rhel-7)
+* [ Install on RHEL 6      ](#install-on-rhel-6)
+* [ Install on Gentoo      ](#install-on-gentoo)
+* [ Install on Alpine      ](#install-on-alpine)
+* [ Install from Source    ](#install-from-source)
 
 Run without Installing
 ----------------------
 
-You can probe your computer by [AppImage](https://github.com/linuxhw/hw-probe#appimage), [Docker image](https://github.com/linuxhw/hw-probe#docker), [Snap](https://github.com/linuxhw/hw-probe#snap), [Flatpak](https://github.com/linuxhw/hw-probe#flatpak) or [Live CD](https://github.com/linuxhw/hw-probe#live-cd) without the need to install anything on your host.
+You can probe your computer by [AppImage](https://github.com/linuxhw/hw-probe#appimage), [Docker](https://github.com/linuxhw/hw-probe#docker), [Snap](https://github.com/linuxhw/hw-probe#snap), [Flatpak](https://github.com/linuxhw/hw-probe#flatpak) or [Live CD](https://github.com/linuxhw/hw-probe#live-cd) without the need to install anything on your host.
+
+
+Command line to Run
+-------------------
+
+    sudo hw-probe -all -upload
+
+
+Install on Ubuntu
+-----------------
+
+On Ubuntu and Ubuntu based Linux distributions (Linux Mint, elementary OS, etc.).
+
+###### Deb package
+
+Download Deb package [hw-probe_1.4-2_all.deb](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe_1.4-2_all.deb) and install:
+
+    sudo apt-get install ./hw-probe_1.4-2_all.deb --no-install-recommends
+
+###### PPA
+
+https://launchpad.net/~mikhailnov/+archive/ubuntu/hw-probe
+
+    sudo add-apt-repository universe
+    sudo add-apt-repository ppa:mikhailnov/hw-probe
+    sudo apt update
+    sudo apt install hw-probe --no-install-recommends
+
+###### Snap
+
+The [Snap package](https://github.com/linuxhw/hw-probe#snap) is also available to install and run easily on Ubuntu without the need to install any Deb packages to your system.
+
+
+Install on Debian
+-----------------
+
+Download Deb package [hw-probe_1.4-2_all.deb](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe_1.4-2_all.deb) and install:
+
+    sudo apt-get update
+    sudo dpkg -i ./hw-probe_1.4-2_all.deb
+    sudo apt install -f --no-install-recommends
+
+
+Install on openSUSE
+-------------------
+
+Setup an OBS repository and install the package:
+
+    sudo zypper addrepo https://download.opensuse.org/repositories/hardware/openSUSE_Leap_15.0/ hardware
+    sudo zypper install --no-recommends hw-probe
+
+
+Install on Manjaro
+------------------
+
+For Manjaro 18 and later:
+
+    sudo pacman -S hw-probe
+
+
+Install on Arch Linux
+---------------------
+
+On Arch Linux and Arch Linux based Linux distributions (Antergos, ArcoLinux, Chakra, KaOS, etc.):
+
+###### From AUR
+
+    git clone https://aur.archlinux.org/hw-probe.git
+    cd hw-probe
+    makepkg -sri
+
+###### Binary Package
+
+Download package [hw-probe-1.4-1.ArchLinux-any.pkg.tar.xz](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe-1.4-1.ArchLinux-any.pkg.tar.xz) and install by pacman:
+
+    pacman -U ./hw-probe-1.4-1.ArchLinux-any.pkg.tar.xz
+
+
+Install on Fedora
+-----------------
+
+For Fedora 28 and later:
+
+    sudo dnf install hw-probe
+
+
+Install on CentOS 7
+-------------------
+
+    sudo yum install epel-release
+    sudo yum install hw-probe
+
+###### Old systems
+
+    curl https://raw.githubusercontent.com/linuxhw/hw-probe/master/hw-probe.pl | sudo dd of=/usr/bin/hw-probe
+    sudo chmod +x /usr/bin/hw-probe
+    sudo yum install -y http://li.nux.ro/download/nux/dextop/el7/x86_64/libx86emu-1.1-2.1.x86_64.rpm
+    sudo yum install -y http://li.nux.ro/download/nux/dextop/el7/x86_64/hwinfo-20.2-5.3.x86_64.rpm
+    sudo yum install -y curl dmidecode smartmontools hdparm lm_sensors usbutils pciutils mcelog
+
+
+Install on CentOS 6
+-------------------
+
+    sudo yum install epel-release
+    sudo yum install hw-probe
+
+###### Old systems
+
+    curl https://raw.githubusercontent.com/linuxhw/hw-probe/master/hw-probe.pl | sudo dd of=/usr/bin/hw-probe
+    sudo chmod +x /usr/bin/hw-probe
+    sudo yum install -y http://mirror.ghettoforge.org/distributions/gf/el/6/gf/x86_64/libx86emu-1.1-1.gf.el6.x86_64.rpm
+    sudo yum install -y http://mirror.ghettoforge.org/distributions/gf/el/6/gf/x86_64/hwinfo-20.2-1.gf.el6.x86_64.rpm
+    sudo yum install -y curl dmidecode smartmontools hdparm lm_sensors usbutils pciutils mcelog
+
+
+Install on RHEL 7
+-----------------
+
+    sudo yum install epel-release
+    sudo yum install hw-probe
+
+
+Install on RHEL 6
+-----------------
+
+    sudo yum install epel-release
+    sudo yum install hw-probe
+
+
+Install on Gentoo
+-----------------
+
+    sudo eselect repository enable bobwya
+    sudo emerge --ask sys-apps/hw-probe
+
+
+Install on Alpine
+-----------------
+
+    sudo apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing hw-probe
+
 
 Install from Source
 -------------------
@@ -53,170 +200,26 @@ To uninstall:
 
 ###### Recommends
 
+* libwww-perl (to use instead of curl)
 * mcelog
 * hdparm
 * systemd-tools (systemd-analyze)
 * acpica-tools
 * mesa-demos
-* vulkan-utils
 * memtester
-* vulkan-utils
-* rfkill
 * sysstat (iostat)
 * cpuid
+* rfkill
 * xinput
 * vainfo
 * inxi
+* vulkan-utils
 * i2c-tools
 * opensc
 
 ###### Suggests
 
-* libwww-perl (to use instead of curl)
 * hplip (hp-probe)
 * sane-backends (sane-find-scanner)
 * pnputils (lspnp)
-
-
-Install on Ubuntu
------------------
-
-PPA: https://launchpad.net/~mikhailnov/+archive/ubuntu/hw-probe
-
-On Ubuntu and Ubuntu based Linux distributions (Linux Mint, elementary OS, etc.) you can install a PPA package:
-
-    sudo add-apt-repository universe
-    sudo add-apt-repository ppa:mikhailnov/hw-probe
-    sudo apt update
-    sudo apt install hw-probe --no-install-recommends
-
-###### Snap
-
-The [Snap package](https://github.com/linuxhw/hw-probe#snap) is also available to install and run easily on Ubuntu without the need to install any Deb packages to your system.
-
-Install on Debian
------------------
-
-Download DEB package [hw-probe_1.4-2_all.deb](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe_1.4-2_all.deb) and install:
-
-    sudo dpkg -i ./hw-probe_1.4-2_all.deb
-    sudo apt install -f --no-install-recommends
-
-
-Install on openSUSE
--------------------
-
-Setup an OBS repository and install the package:
-
-    sudo zypper addrepo -G -f obs://home:linuxbuild/openSUSE_Factory hw-probe
-    sudo zypper install --no-recommends hw-probe
-
-
-Install on Arch Linux
----------------------
-
-On Arch Linux and Arch Linux based Linux distributions (Manjaro, Antergos, etc.):
-
-###### From AUR
-
-    git clone https://aur.archlinux.org/hw-probe.git
-    cd hw-probe
-    makepkg -sri
-
-###### Binary Package
-
-Download package [hw-probe-1.4-1.ArchLinux-any.pkg.tar.xz](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe-1.4-1.ArchLinux-any.pkg.tar.xz) and install by pacman:
-
-    pacman -U ./hw-probe-1.4-1.ArchLinux-any.pkg.tar.xz
-
-
-Install on Fedora
------------------
-
-Download package [hw-probe-1.4-101.1.Fedora.noarch.rpm](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe-1.4-101.1.Fedora.noarch.rpm) and install:
-
-    sudo yum install ./hw-probe-1.4-101.1.Fedora.noarch.rpm
-
-###### Fedora repository
-
-    sudo dnf config-manager --add-repo https://download.opensuse.org/repositories/home:/linuxbuild/Fedora_Rawhide/home:linuxbuild.repo
-    sudo dnf config-manager --set-enabled home_linuxbuild
-    sudo dnf install hw-probe
-
-Install on CentOS 7
--------------------
-
-Install dependencies:
-
-    sudo yum install perl-Digest-SHA curl dmidecode pciutils usbutils smartmontools \
-    lm_sensors mcelog xorg-x11-utils xorg-x11-server-utils
-
-Install `hwinfo` and `libx86emu`:
-
-    sudo yum install http://li.nux.ro/download/nux/dextop/el7/x86_64/hwinfo-20.2-5.3.x86_64.rpm \
-    http://li.nux.ro/download/nux/dextop/el7/x86_64/libx86emu-1.1-2.1.x86_64.rpm
-
-Make a probe:
-
-    curl -s https://raw.githubusercontent.com/linuxhw/hw-probe/master/hw-probe.pl | sudo perl - -all -upload
-
-
-Install on CentOS 6
--------------------
-
-Install dependencies:
-
-    sudo yum install perl-Digest-SHA curl dmidecode pciutils usbutils smartmontools \
-    lm_sensors mcelog xorg-x11-utils xorg-x11-server-utils
-
-Install `hwinfo` and `libx86emu`:
-
-    sudo yum install http://mirror.ghettoforge.org/distributions/gf/el/6/gf/x86_64/hwinfo-20.2-1.gf.el6.x86_64.rpm \
-    http://mirror.ghettoforge.org/distributions/gf/el/6/gf/x86_64/libx86emu-1.1-1.gf.el6.x86_64.rpm
-
-Make a probe:
-
-    curl -s https://raw.githubusercontent.com/linuxhw/hw-probe/master/hw-probe.pl | sudo perl - -all -upload
-
-
-Build Debian package
---------------------
-
-Build and install the latest version of hw-probe as a Deb (Debian/Ubuntu/Mint) package:
-
-###### Quick way
-
-    sudo apt install build-essential
-    dpkg-buildpackage -us -uc -tc
-    sudo apt install ../hw-probe_*.deb
-
-###### Neat way
-
-Install build scripts:
-
-    sudo apt install devscripts
-     
-You may want to manually update the version of hw-probe in `debian/changelog`, just edit it in any text editor, save and run `git add .`. Note that you have to stage all changes in git by running e.g. `git add .` or `git commit -a`, because it is `3.0 (git)` in `debian/source/format` and `dpkg-buildpackage` will want to have all changes staged or commited in git before building the deb package.
-
-Install build dependencies as a dummy package `hw-probe-build-deps`, which will denpend from other build dependencies:
-
-    sudo mk-build-deps -r --install debian/control
-     
-Now build the package:
-
-    dpkg-buildpackage -us -uc -tc -i
-     
-And install it (note, that it will be located one directory level up than the current directory):
-
-    sudo apt install ../hw-probe_*.deb
-     
-Remove build scripts and build dependencies:
-
-    sudo apt autoremove hw-probe-build-deps devscripts
-
-###### Uninstall
-
-Remove hw-probe and dependencies:
-
-    sudo apt autoremove hw-probe
 

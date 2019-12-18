@@ -1,24 +1,27 @@
 name: hw-probe
-version: 1.4-10
-summary: A tool to check operability of computer hardware
+version: 1.4-11
+summary: Check operability of computer hardware and find drivers
 description: >
  A tool to check operability of computer hardware and upload result
  to the Linux hardware database.
      
- Probe — is a snapshot of your computer hardware state and system
- logs. The tool returns a permanent URL to view the probe of the
- computer.
+ Probe — is a snapshot of your computer hardware state and logs.
+ The tool checks operability of devices by analysis of logs and
+ returns a permanent url to view the probe of the computer.
      
- The tool is intended to simplify collecting of logs necessary for
- investigating hardware related problems. Just ask a user to run one
- simple command to collect all the system logs at once:
+ The probes are intended to simplify collecting of logs necessary for
+ investigating hardware related problems. Just run one simple command
+ to check hardware and collect all the system logs at once:
  
      sudo hw-probe -all -upload
  
- Make sure required Snap interfaces are connected:
- 
-     for i in hardware-observe mount-observe network-observe system-observe upower-observe log-observe raw-usb physical-memory-observe opengl;do sudo snap connect hw-probe:$i :$i; done
- 
+ If some of your computer devices does not work due to a missed driver
+ then the tool will suggest a proper Linux kernel version according
+ to the LKDDb or third-party drivers.
+     
+ Enable all interfaces in Permissions in order to collect more info.
+ Private info is not collected.
+     
  By creating probes you contribute to the HDD/SSD Real-Life
  Reliability Test study: https://github.com/linuxhw/SMART
      
@@ -30,7 +33,7 @@ grade: stable
 apps:
   hw-probe:
     command: usr/bin/hw-probe -snap
-    plugs: [hardware-observe, mount-observe, network-observe, system-observe, upower-observe, log-observe, raw-usb, physical-memory-observe, opengl]
+    plugs: [hardware-observe, system-observe, block-devices, log-observe, upower-observe, physical-memory-observe, network-observe, raw-usb, mount-observe, opengl]
     environment:
       PATH: $PATH:$SNAP/sbin:$SNAP/usr/sbin:$SNAP/usr/bin
       PERL5LIB: $SNAP/usr/share/perl5:$SNAP/usr/lib/x86_64-linux-gnu/perl-base:$SNAP/usr/lib/i386-linux-gnu/perl-base
@@ -38,8 +41,8 @@ apps:
       LC_ALL: C
 parts:
   edid-decode:
-    source: https://git.linuxtv.org/cgit.cgi/edid-decode.git
-    source-type: git
+    source: https://github.com/linuxhw/build-stuff/releases/download/1.4/edid-decode-20180622.tar.gz
+    source-type: tar
     plugin: make
     override-build: |
       sed -i -e 's/ -g / -s /' Makefile
@@ -70,7 +73,7 @@ parts:
     prime:
       - usr/sbin
   lm-sensors:
-    source: https://ftp.gwdg.de/pub/linux/misc/lm-sensors/lm_sensors-3.4.0.tar.bz2
+    source: https://github.com/lm-sensors/lm-sensors/archive/V3-5-0.tar.gz
     source-type: tar
     plugin: make
     override-build: |
@@ -106,6 +109,8 @@ parts:
     plugin: make
     override-build: |
       curl http://www.linux-usb.org/usb.ids > usb.ids
+      curl "http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD" > ./usbhid-dump/auxdir/config.guess
+      curl "http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD" > ./usbhid-dump/auxdir/config.sub
       ./configure --prefix=/usr
       sed -i -e 's/ -g / -s /' Makefile
       make
@@ -141,7 +146,7 @@ parts:
       - usr/sbin/lspci
       - usr/share/pci.ids
   acpica-unix:
-    source: https://acpica.org/sites/acpica/files/acpica-unix-20180629.tar.gz
+    source: https://acpica.org/sites/acpica/files/acpica-unix-20190816.tar.gz
     source-type: tar
     plugin: make
     build-attributes: [no-patchelf]
@@ -169,7 +174,7 @@ parts:
     prime:
       - sbin/hdparm
   smartmontools:
-    source: https://github.com/linuxhw/build-stuff/releases/download/1.4/smartmontools-6.6.tar.gz
+    source: https://github.com/linuxhw/build-stuff/releases/download/1.4/smartmontools-7.0.tar.gz
     source-type: tar
     plugin: make
     override-build: |
@@ -203,7 +208,7 @@ parts:
     prime:
       - usr/lib/libusb*.so*
   util-linux:
-    source: https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.32/util-linux-2.32.1.tar.gz
+    source: https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.34/util-linux-2.34.tar.xz
     source-type: tar
     plugin: make
     override-build: |
@@ -235,11 +240,11 @@ parts:
       - make
   hwinfo:
     after: [libx86emu]
-    source: https://github.com/openSUSE/hwinfo/archive/21.61.tar.gz
+    source: https://github.com/openSUSE/hwinfo/archive/21.64.tar.gz
     source-type: tar
     plugin: make
     override-build: |
-      echo '21.61' > VERSION
+      echo '21.64' > VERSION
       rm -f git2log
       sed -i -e 's/ -g / -s /' Makefile.common
       CFLAGS='-I'$SNAPCRAFT_STAGE'/usr/include' LDFLAGS='-L'$SNAPCRAFT_STAGE'/usr/lib64 -L'$SNAPCRAFT_STAGE'/usr/lib -lx86emu' make
@@ -394,6 +399,8 @@ parts:
     plugin: make
     override-build: |
       make install DESTDIR=$SNAPCRAFT_PART_INSTALL
+      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/share/icons/
+      cp -f flatpak/icon-64x64.png $SNAPCRAFT_PART_INSTALL/usr/share/icons/hw-probe.png
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/share/perl5/File/
       mv $SNAPCRAFT_PART_INSTALL/usr/share/perl/5.*.*/File/Copy.pm $SNAPCRAFT_PART_INSTALL/usr/share/perl5/File/
     build-packages:
@@ -407,4 +414,5 @@ parts:
       - usr/lib/*-linux-gnu/perl-base
       - usr/bin/perl
       - usr/share/perl5/File/Copy.pm
+      - usr/share/icons/hw-probe.png
 
