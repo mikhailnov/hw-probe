@@ -52,18 +52,18 @@ Usage
 
 Make a probe:
 
-    sudo hw-probe -all -upload
+    sudo -E hw-probe -all -upload
 
 
 AppImage
 --------
 
-The portable app that runs anywhere, no need to install anything. Just download [hw-probe-1.4-135-x86_64.AppImage](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe-1.4-135-x86_64.AppImage) and run the following command in terminal to probe your computer:
+The portable app that runs anywhere, no need to install anything. Just download [hw-probe-1.4-141-x86_64.AppImage](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe-1.4-141-x86_64.AppImage) and run the following command in terminal to probe your computer:
 
-    chmod +x ./hw-probe-1.4-135-x86_64.AppImage
-    sudo ./hw-probe-1.4-135-x86_64.AppImage -all -upload
+    chmod +x ./hw-probe-1.4-141-x86_64.AppImage
+    sudo ./hw-probe-1.4-141-x86_64.AppImage -all -upload
 
-You may need to install `fuse-libs` or `libfuse2` package if it is not pre-installed in your Linux distribution to run appimages.
+You may need to install `fuse-libs` or `libfuse2` package if it is not pre-installed in your Linux distribution to run appimages. Also try [old AppImage](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe-1.4-135-x86_64.AppImage) if you have troubles to run the latest image (e.g. on ancient Linux versions).
 
 ###### Supported systems
 
@@ -79,12 +79,14 @@ The app runs on all 64-bit Linux distributions with `Glibc >= 2.14` including:
 * Fedora 15 and newer (need to add `fuse-libs` package to host on Fedora 15, 16 and 17)
 * RHEL 7 and newer
 * CentOS 7 and newer
+* Puppy Linux 6.0 and newer (Tahr64, XenialPup64, BionicPup64, etc.)
+* Clear Linux of any version
+* Pop!_OS 17 and newer
 * Mageia 2 and newer
 * Alt Linux 7 and newer
 * Gentoo 12 and newer
 * Sabayon 13 and newer
 * Slackware 14.2 and newer
-* Puppy Linux 6.0 and newer (Tahr, XenialPup, BionicPup, etc.)
 
 Docker
 ------

@@ -19,18 +19,22 @@ Contents
 * [ Install on Manjaro     ](#install-on-manjaro)
 * [ Install on Arch Linux  ](#install-on-arch-linux)
 * [ Install on Fedora      ](#install-on-fedora)
+* [ Install on CentOS 8    ](#install-on-centos-8)
 * [ Install on CentOS 7    ](#install-on-centos-7)
 * [ Install on CentOS 6    ](#install-on-centos-6)
+* [ Install on OpenVZ 7    ](#install-on-openvz-7)
+* [ Install on RHEL 8      ](#install-on-rhel-8)
 * [ Install on RHEL 7      ](#install-on-rhel-7)
 * [ Install on RHEL 6      ](#install-on-rhel-6)
 * [ Install on Gentoo      ](#install-on-gentoo)
 * [ Install on Alpine      ](#install-on-alpine)
+* [ Install on Puppy       ](#install-on-puppy)
 * [ Install from Source    ](#install-from-source)
 
 Run without Installing
 ----------------------
 
-You can probe your computer by [AppImage](https://github.com/linuxhw/hw-probe#appimage), [Docker](https://github.com/linuxhw/hw-probe#docker), [Snap](https://github.com/linuxhw/hw-probe#snap), [Flatpak](https://github.com/linuxhw/hw-probe#flatpak) or [Live CD](https://github.com/linuxhw/hw-probe#live-cd) without the need to install anything on your host.
+You can probe your computer by [AppImage](https://github.com/linuxhw/hw-probe/blob/master/README.md#appimage), [Docker](https://github.com/linuxhw/hw-probe#docker), [Snap](https://github.com/linuxhw/hw-probe#snap), [Flatpak](https://github.com/linuxhw/hw-probe#flatpak) or [Live CD](https://github.com/linuxhw/hw-probe#live-cd) without the need to install anything on your host.
 
 
 Command line to Run
@@ -46,9 +50,11 @@ On Ubuntu and Ubuntu based Linux distributions (Linux Mint, elementary OS, etc.)
 
 ###### Deb package
 
-Download Deb package [hw-probe_1.4-2_all.deb](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe_1.4-2_all.deb) and install:
+Download Debian package [hw-probe_1.4-1_all.deb](http://ftp.debian.org/debian/pool/main/h/hw-probe/hw-probe_1.4-1_all.deb) and install:
 
-    sudo apt-get install ./hw-probe_1.4-2_all.deb --no-install-recommends
+    sudo add-apt-repository universe
+    sudo apt-get update
+    sudo apt-get install ./hw-probe_1.4-1_all.deb --no-install-recommends
 
 ###### PPA
 
@@ -67,10 +73,20 @@ The [Snap package](https://github.com/linuxhw/hw-probe#snap) is also available t
 Install on Debian
 -----------------
 
-Download Deb package [hw-probe_1.4-2_all.deb](https://github.com/linuxhw/hw-probe/releases/download/1.4/hw-probe_1.4-2_all.deb) and install:
+###### Debian Sid
+
+Enable Unstable repository and install:
+
+    echo "deb http://http.us.debian.org/debian unstable main non-free contrib" | sudo tee -a /etc/apt/sources.list
+    sudo apt-get update
+    sudo apt-get install hw-probe --no-install-recommends
+
+###### Any Debian
+
+Download Deb package [hw-probe_1.4-1_all.deb](http://ftp.debian.org/debian/pool/main/h/hw-probe/hw-probe_1.4-1_all.deb) and install:
 
     sudo apt-get update
-    sudo dpkg -i ./hw-probe_1.4-2_all.deb
+    sudo dpkg -i ./hw-probe_1.4-1_all.deb
     sudo apt install -f --no-install-recommends
 
 
@@ -88,7 +104,7 @@ Install on Manjaro
 
 For Manjaro 18 and later:
 
-    sudo pacman -S hw-probe
+    sudo pacman -Sy hw-probe
 
 
 Install on Arch Linux
@@ -115,6 +131,13 @@ Install on Fedora
 For Fedora 28 and later:
 
     sudo dnf install hw-probe
+
+
+Install on CentOS 8
+-------------------
+
+    sudo yum install epel-release
+    sudo yum install hw-probe
 
 
 Install on CentOS 7
@@ -147,6 +170,20 @@ Install on CentOS 6
     sudo yum install -y curl dmidecode smartmontools hdparm lm_sensors usbutils pciutils mcelog
 
 
+Install on OpenVZ 7
+-------------------
+
+    sudo yum install epel-release
+    sudo yum install hw-probe
+
+
+Install on RHEL 8
+-----------------
+
+    sudo yum install epel-release
+    sudo yum install hw-probe
+
+
 Install on RHEL 7
 -----------------
 
@@ -164,14 +201,34 @@ Install on RHEL 6
 Install on Gentoo
 -----------------
 
-    sudo eselect repository enable bobwya
     sudo emerge --ask sys-apps/hw-probe
+
+###### Manual
+
+    sudo emerge --ask sys-apps/hwinfo
+    sudo emerge --ask sys-apps/pciutils
+    sudo emerge --ask sys-apps/usbutils
+    sudo emerge --ask sys-apps/dmidecode
+    curl https://raw.githubusercontent.com/linuxhw/hw-probe/master/hw-probe.pl | sudo dd of=/usr/bin/hw-probe
+    sudo chmod +x /usr/bin/hw-probe
 
 
 Install on Alpine
 -----------------
 
     sudo apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing hw-probe
+
+
+Install on Puppy
+----------------
+
+For Puppy 7 and later (XenialPup64, BionicPup64, etc.):
+
+Update local database by Menu > Setup > Puppy Package Manager > Configure > Update database > Update now.
+Install `perl-base`, `hwinfo`, `util-linux` and `smartmontools` by Menu > Setup > Puppy Package Manager.
+
+    curl https://raw.githubusercontent.com/linuxhw/hw-probe/master/hw-probe.pl | sudo dd of=/usr/bin/hw-probe
+    sudo chmod +x /usr/bin/hw-probe
 
 
 Install from Source
