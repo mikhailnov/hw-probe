@@ -62,7 +62,9 @@ Suggests: systemd,
           efibootmgr,
           dkms,
           sane-utils,
-          dracut-core
+          dracut-core,
+          hddtemp,
+          nvme-cli
 # smartmontools pulls Postfix (https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=898121)
 # dracut-core pulls lvm2
 # that is why they are 'Suggested' dependencies, but they should be 'Recommended'
