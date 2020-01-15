@@ -1,46 +1,47 @@
 INSTALL HOWTO
 =============
 
-HW Probe 1.4 (April 14, 2018)
+HW Probe 1.5 (January 15, 2020)
 
 This file explains how to install and setup environment for the tool in your computer.
 
-See more info in the [README.md](https://github.com/linuxhw/hw-probe/).
+See more info in the [README.md](README.md).
 
 
 Contents
 --------
 
-* [ Run without Installing ](#run-without-installing)
-* [ Command line to Run    ](#command-line-to-run)
-* [ Install on Ubuntu      ](#install-on-ubuntu)
-* [ Install on Debian      ](#install-on-debian)
-* [ Install on openSUSE    ](#install-on-opensuse)
-* [ Install on Manjaro     ](#install-on-manjaro)
-* [ Install on Arch Linux  ](#install-on-arch-linux)
-* [ Install on Fedora      ](#install-on-fedora)
-* [ Install on CentOS 8    ](#install-on-centos-8)
-* [ Install on CentOS 7    ](#install-on-centos-7)
-* [ Install on CentOS 6    ](#install-on-centos-6)
-* [ Install on OpenVZ 7    ](#install-on-openvz-7)
-* [ Install on RHEL 8      ](#install-on-rhel-8)
-* [ Install on RHEL 7      ](#install-on-rhel-7)
-* [ Install on RHEL 6      ](#install-on-rhel-6)
-* [ Install on Gentoo      ](#install-on-gentoo)
-* [ Install on Alpine      ](#install-on-alpine)
-* [ Install on Puppy       ](#install-on-puppy)
-* [ Install from Source    ](#install-from-source)
+* [ Run without Installing  ](#run-without-installing)
+* [ Command line to Run     ](#command-line-to-run)
+* [ Install on Ubuntu       ](#install-on-ubuntu)
+* [ Install on Debian       ](#install-on-debian)
+* [ Install on openSUSE     ](#install-on-opensuse)
+* [ Install on Manjaro      ](#install-on-manjaro)
+* [ Install on Arch Linux   ](#install-on-arch-linux)
+* [ Install on Fedora       ](#install-on-fedora)
+* [ Install on CentOS 8     ](#install-on-centos-8)
+* [ Install on CentOS 7     ](#install-on-centos-7)
+* [ Install on CentOS 6     ](#install-on-centos-6)
+* [ Install on OpenVZ 7     ](#install-on-openvz-7)
+* [ Install on RHEL 8       ](#install-on-rhel-8)
+* [ Install on RHEL 7       ](#install-on-rhel-7)
+* [ Install on RHEL 6       ](#install-on-rhel-6)
+* [ Install on Gentoo       ](#install-on-gentoo)
+* [ Install on Alpine       ](#install-on-alpine)
+* [ Install on Puppy        ](#install-on-puppy)
+* [ Install on blackPanther ](#install-on-blackpanther)
+* [ Install from Source     ](#install-from-source)
 
 Run without Installing
 ----------------------
 
-You can probe your computer by [AppImage](https://github.com/linuxhw/hw-probe/blob/master/README.md#appimage), [Docker](https://github.com/linuxhw/hw-probe#docker), [Snap](https://github.com/linuxhw/hw-probe#snap), [Flatpak](https://github.com/linuxhw/hw-probe#flatpak) or [Live CD](https://github.com/linuxhw/hw-probe#live-cd) without the need to install anything on your host.
+You can probe your computer by [AppImage](README.md#appimage), [Docker](README.md#docker), [Snap](README.md#snap), [Flatpak](README.md#flatpak) or [Live CD](README.md#live-cd) without the need to install anything on your host.
 
 
 Command line to Run
 -------------------
 
-    sudo hw-probe -all -upload
+    sudo -E hw-probe -all -upload
 
 
 Install on Ubuntu
@@ -62,32 +63,33 @@ https://launchpad.net/~mikhailnov/+archive/ubuntu/hw-probe
 
     sudo add-apt-repository universe
     sudo add-apt-repository ppa:mikhailnov/hw-probe
-    sudo apt update
-    sudo apt install hw-probe --no-install-recommends
+    sudo apt-get update
+    sudo apt-get install hw-probe --no-install-recommends
 
 ###### Snap
 
-The [Snap package](https://github.com/linuxhw/hw-probe#snap) is also available to install and run easily on Ubuntu without the need to install any Deb packages to your system.
+The [Snap package](README.md#snap) is also available to install and run easily on Ubuntu without the need to install any Deb packages to your system.
 
 
 Install on Debian
 -----------------
 
-###### Debian Sid
+On Debian and Debian based Linux distributions (Kali, MX Linux, PureOS, etc.):
 
-Enable Unstable repository and install:
-
-    echo "deb http://http.us.debian.org/debian unstable main non-free contrib" | sudo tee -a /etc/apt/sources.list
+    sudo apt-get install debian-archive-keyring
+    sudo sh -c 'echo deb http://deb.debian.org/debian unstable main > /etc/apt/sources.list.d/debian-sid.list'
     sudo apt-get update
-    sudo apt-get install hw-probe --no-install-recommends
+    sudo apt-get install --no-install-recommends hw-probe
+    sudo rm -f /etc/apt/sources.list.d/debian-sid.list
+    sudo apt-get update
 
-###### Any Debian
+###### Standalone
 
 Download Deb package [hw-probe_1.4-1_all.deb](http://ftp.debian.org/debian/pool/main/h/hw-probe/hw-probe_1.4-1_all.deb) and install:
 
     sudo apt-get update
     sudo dpkg -i ./hw-probe_1.4-1_all.deb
-    sudo apt install -f --no-install-recommends
+    sudo apt-get install -f --no-install-recommends
 
 
 Install on openSUSE
@@ -230,6 +232,14 @@ Install `perl-base`, `hwinfo`, `util-linux` and `smartmontools` by Menu > Setup 
     curl https://raw.githubusercontent.com/linuxhw/hw-probe/master/hw-probe.pl | sudo dd of=/usr/bin/hw-probe
     sudo chmod +x /usr/bin/hw-probe
 
+Install on blackPanther
+-----------------------
+
+For blackPanther OS 16.2 and later:
+
+    installing hw-probe
+
+This command will install all the dependencies as well.
 
 Install from Source
 -------------------

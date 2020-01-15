@@ -1,7 +1,9 @@
-HW PROBE 1.4
+HW PROBE 1.5
 ============
 
-Hardware Probe Tool (HW Probe) — a tool to probe for hardware, check its operability and upload result to the Linux hardware database: https://linux-hardware.org
+Hardware Probe Tool (hw-probe) — a tool to probe for hardware, check its operability and find drivers.
+
+The probes are uploaded to the Linux hardware database: https://linux-hardware.org
 
 
 Contents
@@ -44,7 +46,7 @@ Install
 
 You can probe your computer by [AppImage](#appimage), [Docker](#docker), [Snap](#snap), [Flatpak](#flatpak) or [Live CD](#live-cd).
 
-Also you can install a native package (RPM, Deb, Pkg, etc.) for your Linux distribution or install from source. See install instructions in the [INSTALL.md](https://github.com/linuxhw/hw-probe/blob/master/INSTALL.md) file.
+Also you can install a native package (RPM, Deb, Pkg, etc.) for your Linux distribution or install from source. See install instructions in the [INSTALL.md](INSTALL.md) file.
 
 
 Usage
@@ -74,9 +76,10 @@ The app runs on all 64-bit Linux distributions with `Glibc >= 2.14` including:
 * Debian 8 and newer
 * openSUSE 12.0 and newer
 * Manjaro 0.8 and newer
+* MX Linux 14 and newer
 * ROSA Linux R1 and newer
 * elementary OS 0.2 and newer
-* Fedora 15 and newer (need to add `fuse-libs` package to host on Fedora 15, 16 and 17)
+* Fedora 15 and newer (need to add `fuse-libs` package on Fedora 15, 16 and 17)
 * RHEL 7 and newer
 * CentOS 7 and newer
 * Puppy Linux 6.0 and newer (Tahr64, XenialPup64, BionicPup64, etc.)
@@ -203,6 +206,8 @@ For other Linux distributions see install manual here: https://flatpak.org/setup
 Inventory
 ---------
 
+Since hw-probe 1.5.
+
 Request inventory ID:
 
     hw-probe -get-inventory-id
@@ -217,9 +222,11 @@ Find your computers by the inventory ID on this page: https://linux-hardware.org
 Offline view
 ------------
 
-Save your probes HTML view to a directory for offline use:
+Since hw-probe 1.5.
 
-    sudo hw-probe -import DIR
+Save your probes HTML view to a directory DIR for offline use:
+
+    hw-probe -import ./DIR -inventory-id ID
 
 
 ACPI dump
@@ -241,12 +248,12 @@ The tool checks operability of devices on board by analysis of collected log fil
 
 The following tests are executed:
 
-* graphics test by `glxgears` (for both integrated and discrete graphics cards, requires `mesa-demos` package to be installed)
-* drive read speed test by `hdparm` (for all HDDs and SSDs)
+* graphics test by `glxgears` for both integrated and discrete graphics cards (requires `mesa-demos` package to be installed)
+* drive read speed test by `hdparm` for all HDDs and SSDs
 * CPU performance test by `dd` and `md5sum`
 * RAM memory test by `memtester`
 
-Execution time is about 1 min for average modern desktop hardware.
+Execution time is about 1 min for average modern desktop hardware. You can execute particular tests using appropriate options: `-check-graphics`, `-check-hdd`, `-check-cpu` and `-check-memory`.
 
 
 Disable logs
@@ -264,7 +271,7 @@ Privacy
 
 Private information (including the username, machine's hostname, IP addresses, MAC addresses and serial numbers) is NOT uploaded to the database.
 
-The tool uploads SHA512 hash of MAC addresses and serial numbers to properly identify unique computers and hard drives. All the data is uploaded securely via HTTPS.
+The tool uploads 32-byte prefix of salted SHA512 hash of MAC addresses and serial numbers to properly identify unique computers and hard drives. All the data is uploaded securely via HTTPS.
 
 
 Enjoy!

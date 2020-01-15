@@ -1,18 +1,18 @@
 #!/usr/bin/perl
 #########################################################################
-# Hardware Probe 1.4
+# Hardware Probe 1.5
 # A tool to probe for hardware, check operability and find drivers
 #
 # WWW: https://linux-hardware.org
 #
-# Copyright (C) 2014-2019 Andrey Ponomarenko's Linux Hardware Project
+# Copyright (C) 2014-2020 Andrey Ponomarenko's Linux Hardware Project
 #
 # Written by Andrey Ponomarenko
 # LinkedIn: https://www.linkedin.com/in/andreyponomarenko
 #
 # PLATFORMS
 # =========
-#  Linux (Fedora, CentOS, RHEL, Ubuntu, Debian, Mint, Arch,
+#  Linux (Fedora, CentOS, RHEL, Ubuntu, Debian, Mint, MX, Arch,
 #         Gentoo, ROSA, Mandriva, Clear Linux, Alpine ...)
 #
 # REQUIRES
@@ -78,7 +78,7 @@ use File::Copy qw(copy move);
 use File::Basename qw(basename dirname);
 use Cwd qw(abs_path cwd);
 
-my $TOOL_VERSION = "1.4";
+my $TOOL_VERSION = "1.5";
 my $URL = "https://linux-hardware.org";
 my $GITHUB = "https://github.com/linuxhw/hw-probe";
 
@@ -128,7 +128,7 @@ GetOptions("h|help!" => \$Opt{"Help"},
   "check-memory!" => \$Opt{"CheckMemory"},
   "check-cpu!" => \$Opt{"CheckCpu"},
   "id|name=s" => \$Opt{"PC_Name"},
-  "upload!" => \$Opt{"Upload"},
+  "upload|confirm-upload-of-hashed-ids!" => \$Opt{"Upload"},
   "hwinfo-path=s" => \$Opt{"HWInfoPath"},
   "log!" => \$Opt{"ShowLog"},
 # Inventory
@@ -154,6 +154,7 @@ GetOptions("h|help!" => \$Opt{"Help"},
   "pnp-ids=s" => \$Opt{"PnpIDs"},
   "list!" => \$Opt{"ListProbes"},
   "clean!" => \$Opt{"Clean"},
+  "save-uploaded!" => \$Opt{"SaveUploaded"},
   "debug|d!" => \$Opt{"Debug"},
   "dump-acpi!" => \$Opt{"DumpACPI"},
   "decode-acpi!" => \$Opt{"DecodeACPI"},
@@ -205,10 +206,12 @@ elsif($Opt{"Flatpak"})
     $PROBE_DIR = $ENV{"XDG_DATA_HOME"}."/HW_PROBE";
 }
 
-my $DATA_DIR = $PROBE_DIR."/LATEST/hw.info";
-my $LOG_DIR = $DATA_DIR."/logs";
-my $TEST_DIR = $DATA_DIR."/tests";
+my $LATEST_DIR = $PROBE_DIR."/LATEST";
+my $TMP_PROBE_DIR = $LATEST_DIR."/".basename($TMP_DIR);
+my $TMP_PROBE = $TMP_PROBE_DIR."/hw.info";
 my $PROBE_LOG = $PROBE_DIR."/LOG";
+
+my ($DATA_DIR, $LOG_DIR, $TEST_DIR) = initDataDir($LATEST_DIR."/hw.info");
 
 my $HelpMessage="
 NAME:
@@ -235,9 +238,9 @@ PRIVACY:
   Private information (including the username, machine's hostname, IP addresses,
   MAC addresses and serial numbers) is NOT uploaded to the database.
   
-  The tool uploads salted SHA512 hash of MAC addresses and serial numbers to
-  properly identify unique computers and hard drives. All the data is uploaded
-  securely via HTTPS.
+  The tool uploads 32-byte prefix of salted SHA512 hash of MAC addresses and serial
+  numbers to properly identify unique computers and hard drives. All the data is
+  uploaded securely via HTTPS.
 
 INFORMATION OPTIONS:
   -h|-help
@@ -297,8 +300,12 @@ GENERAL OPTIONS:
       Any description of the probe.
   
   -upload
-      Upload result to the Linux hardware DB. You will get a
-      permanent URL to view the probe.
+      Upload result to the Linux hardware database. You will get
+      a permanent URL to view the probe.
+      
+      By use of this option you confirm uploading of 32-byte
+      prefix of salted SHA512 hash of MAC addresses and serial
+      numbers to prevent duplication of computers in the DB.
   
   -hwinfo-path PATH
       Path to a local hwinfo binary.
@@ -354,7 +361,10 @@ OTHER OPTIONS:
       List executed probes (for debugging).
   
   -clean
-      Remove the probe data after the probe is uploaded.
+      Do nothing. Obsolete option.
+  
+  -save-uploaded
+      Save uploaded probes.
   
   -debug|-d
       Do nothing. Obsolete option.
@@ -370,9 +380,11 @@ OTHER OPTIONS:
       
       If you are using Snap or Flatpak package, then DIR will be created
       in the sandbox data directory.
+      
+      Provide inventory ID by -i option in order to import your inventory.
 
 DATA LOCATION:
-  Probes are saved in the $PROBE_DIR directory.
+  Probes info is saved in the $PROBE_DIR directory.
 
 ";
 
@@ -628,7 +640,9 @@ my %DiskVendor = (
     "FASTDISK"  => "FASTDISK",
     "FB0"       => "HP",
     "FLD"       => "Foxline",
+    "FLSSD"     => "Foxline",
     "Force MP"  => "Corsair",
+    "FTM50"     => "Super Talent",
     "G2242"     => "BIWIN",
     "G3 Series" => "Myung",
     "GB0"       => "HP",
@@ -640,6 +654,7 @@ my %DiskVendor = (
     "HDT"       => "Hitachi",
     "HUA"       => "Hitachi",
     "HFS"       => "SK hynix",
+    "HS-SSD"    => "Hikvision",
     "HT"        => "Hitachi",
     "IC25"      => "IBM/Hitachi",
     "IC35"      => "IBM/Hitachi",
@@ -670,10 +685,14 @@ my %DiskVendor = (
     "R5S"       => "AMD",
     "RDM"       => "Ramaxel",
     "RTMMB"     => "China",
+    "sandisk"   => "SanDisk",
     "S10T"      => "Chiprex",
     "S8M"       => "Chiprex",
     "S9M"       => "Chiprex",
+    "SC2 M2"    => "MyDigitalSSD",
+    "SB M2"     => "MyDigitalSSD",
     "SG9"       => "Samsung",
+    "SH00"      => "China",
     "SPK"       => "KingSpec",
     "SQF-S2"    => "Advantech",
     "SSD2SC"    => "PNY",
@@ -685,6 +704,7 @@ my %DiskVendor = (
     "SU08G"     => "SanDisk",
     "TE2"       => "SanDisk",
     "TEAML5"    => "Team",
+    "Thinklife" => "Lenovo",
     "TP00"      => "China",
     "TRO-SSD7"  => "Eluktro",
     "TS"        => "Transcend",
@@ -695,6 +715,7 @@ my %DiskVendor = (
     "WDC WD10"  => "WDC",
     "WL"        => "WD MediaMax",
     "XUNZHE"    => "XUNZHE",
+    "Y6-"       => "Yunhaitian",
     "ZALMAN"    => "ZALMAN",
     "ZF18-64"   => "Espada"
 );
@@ -703,6 +724,7 @@ my %DiskModelVendor = (
     "16GB SATA Flash Drive"   => "Apacer",
     "256GB SATA Flash Drive"  => "Apacer",
     "SATA Flash Drive"        => "Apacer",
+    "Solid"                   => "Patriot",
     "SSD PLUS 480GB"          => "SanDisk",
     "SSDS30256XQC800134237"   => "Phison",
     "V Series SATA SSD 240GB" => "Integral"
@@ -734,7 +756,8 @@ my %SerialVendor = (
 );
 
 my %FirmwareVendor = (
-    "MZ4O" => "Toshiba"
+    "MZ4O" => "Toshiba",
+    "S0222A0" => "Patriot"
 );
 
 my %MicroCode = (
@@ -910,7 +933,7 @@ my $DESKTOP_TYPE = "desktop|nettop|all in one|box|space\-saving|mini|tower|bus e
 my $SERVER_TYPE  = "server|rack|blade";
 my $MOBILE_TYPE  = "notebook|laptop|portable|tablet|convertible|detachable|docking|stick|hand";
 
-my $HID_BATTERY = "wacom|wiimote|hidpp_|controller_|hid\-";
+my $HID_BATTERY = "wacom|wiimote|hidpp_|controller_|hid\-|steam-controller|power_supply\/bms";
 
 # SDIO IDs
 my %SdioInfo;
@@ -947,6 +970,7 @@ my %MonVendor = (
     "ACR" => "Acer",
     "ADI" => "ADI",
     "AIC" => "Arnos Instruments", # AG Neovo
+    "AMH" => "AMH",
     "AMR" => "JVC",
     "AMT" => "AMT International", # AMTRAN?
     "AMW" => "AMW",
@@ -957,6 +981,7 @@ my %MonVendor = (
     "ATV" => "Ativa",
     "AUO" => "AU Optronics",
     "AUS" => "ASUS",
+    "BAL" => "Balance",
     "BBK" => "BBK",
     "BBY" => "Insignia",
     "BEK" => "Beko",
@@ -964,18 +989,27 @@ my %MonVendor = (
     "BOE" => "BOE",
     "BSE" => "Bose",
     "BTC" => "RS",
+    "BUF" => "Buffalo",
+    "CAS" => "CASIO",
+    "CCE" => "CCE",
+    "CHH" => "Changhong Electric",
+    "CIS" => "Cisco",
+    "CLX" => "Claxan",
     "CMI" => "InnoLux Display",
     "CMN" => "Chimei Innolux",
     "CMO" => "Chi Mei Optoelectronics",
     "CND" => "CND",
     "COR" => "CPT", # Chunghwa Picture Tubes
+    "CPL" => "COMPAL",
     "CPT" => "CPT",
     "CPQ" => "Compaq Computer",
     "CTL" => "CTL",
     "CTX" => "CTX",
     "DEL" => "Dell",
+    "DIC" => "Dinner",
     "DNS" => "DNS",
     "DON" => "DENON",
+    "DSG" => "DSGR",
     "DVM" => "RoverScan",
     "DWE" => "Daewoo",
     "EIZ" => "Eizo",
@@ -987,8 +1021,11 @@ my %MonVendor = (
     "ENV" => "Envision Peripherals",
     "EPI" => "Envision",
     "FAC" => "Yuraku",
+    "FSN" => "D&T",
     "FUS" => "Fujitsu Siemens",
     "GBA" => "GABA",
+    "GEC" => "Gechic",
+    "GMI" => "XGIMI",
     "GRU" => "Grundig",
     "GSM" => "Goldstar",
     "GTW" => "Gateway",
@@ -999,6 +1036,7 @@ my %MonVendor = (
     "HCM" => "HCL",
     "HEC" => "Hitachi",
     "HED" => "Hedy",
+    "HEI" => "Hyundai",
     "HII" => "Higer",
     "HIQ" => "Hyundai ImageQuest",
     "HIT" => "Hitachi",
@@ -1013,21 +1051,27 @@ my %MonVendor = (
     "HWP" => "HP",
     "HPN" => "HP",
     "HUG" => "Hugon",
+    "HUN" => "Huion",
     "IBM" => "IBM",
+    "ICB" => "Pixio",
     "IGM" => "Videoseven",
     "INL" => "InnoLux Display",
+    "INN" => "PRISM+",
     "IQT" => "Hyundai ImageQuest",
+    "ITR" => "INFOTRONIC",
     "IVM" => "Iiyama",
     "IVO" => "InfoVision",
     "JDI" => "JDI", # Japan Display Inc.
     "JEN" => "Jean",
     "JVC" => "JVC",
     "KOA" => "Konka",
+    "KOS" => "KOIOS",
     "KTC" => "KTC",
     "LCA" => "Lacie",
     "LCD" => "Toshiba",
     "LCS" => "Lenovo",
     "LEN" => "Lenovo",
+    "LEO" => "Lenovo",
     "LGD" => "LG Display",
     "LGP" => "LG Philips",
     "LNX" => "Lanix",
@@ -1043,10 +1087,12 @@ my %MonVendor = (
     "MEL" => "Mitsubishi",
     "MJI" => "Marantz",
     "MSC" => "Syscom",
+    "MSH" => "Microsoft",
     "MSI" => "MSI",
     "MS_" => "Sony",
     "MST" => "MStar",
     "MTC" => "Mitac",
+    "MTX" => "Matrox",
     "MUS" => "Mecer",
     "MZI" => "Digital Vision",
     "NCI" => "NECCI",
@@ -1060,7 +1106,10 @@ my %MonVendor = (
     "ONN" => "ONN",
     "ORN" => "Orion",
     "PEA" => "Pegatron",
+    "PEB" => "Proview",
     "PEG" => "PEGA",
+    "PGE" => "GNR",
+    "PHI" => "Philips",
     "PHL" => "Philips",
     "PHT" => "Philips",
     "PIO" => "Pioneer",
@@ -1076,6 +1125,7 @@ my %MonVendor = (
     "QDS" => "Quanta Display",
     "QMX" => "Gericom",
     "QWA" => "Lenovo",
+    "RJT" => "Ruijiang",
     "ROL" => "Rolsen",
     "RUB" => "Rubin",
     "SAM" => "Samsung",
@@ -1109,15 +1159,19 @@ my %MonVendor = (
     "UPS" => "UpStar",
     "VBX" => "VirtualBox",
     "VES" => "Vestel Elektronik",
+    "VIT" => "Vita",
     "VIZ" => "Vizio",
     "VSC" => "ViewSonic",
+    "VSN" => "Videoseven",
     "VTK" => "Viotek",
+    "WAC" => "Wacom",
     "WDE" => "Westinghouse",
     "WDT" => "Westinghouse",
     "WET" => "Westinghouse",
     "WOR" => "COMPAL",
     "WWW" => "ASUS",
     "XER" => "Xerox",
+    "XMD" => "Xiaomi",
     "YAK" => "Yakumo",
     "YMH" => "Yamaha",
     "ZRN" => "Zoran",
@@ -1125,30 +1179,30 @@ my %MonVendor = (
 );
 
 my @UnknownMonVendor = (
-    "AAA", "ACA", "ADP", "AGO", "AML", "ARS", "AVO", "AQU", # Prestigio (ARS)?
+    "AAA", "ACA", "ADA", "ADP", "AGO", "AML", "ARS", "AVO", "AQU", # Prestigio (ARS)?
     "BBY", "BGT",
-    "CDR", "CHD", "CHE", "CHI", "CHR", "CRO", "CTV", "CVT", "CYX",
-    "DCL", "DDL", "DGI", "DMI", "DPL", "DTV", "DVI",
-    "EXP",
-    "FNI", "FRT",
-    "GDH", "GEN", "GER", "GKK", "GLE", "GVT",
-    "JRY", "JXJ",
+    "CDR", "CHD", "CHE", "CHI", "CHR", "CNA", "CNC", "CRO", "CSL", "CTV", "CVA", "CVT", "CYX",
+    "DCL", "DDL", "DGI", "DLM", "DMI", "DPC", "DPL", "DTV", "DVI",
+    "ECS", "ETC", "EXP",
+    "FNI", "FRT", "FZC",
+    "GBM", "GDH", "GEN", "GER", "GKE", "GKK", "GLE", "GML", "GVT",
+    "JCH", "JRY", "JXJ",
     "HCG", "HHT", "HJW", "HSI", "HYO", "HYT",
     "IFS", "INS", "IPS", "IOD", "ITE", # Songren (IPS)?
-    "KDC", "KET", "KNK", "KTC",
-    "LLP", "LLL", "LOS", "LSC", "LTM",
+    "KDC", "KEB", "KET", "KNK", "KRF", "KTC",
+    "LLE", "LLP", "LLL", "LOE", "LOS", "LSC", "LTM",
     "MIT", "MOT", "MTD", "MTK", # MotoAttach (MOT)? VIZIO (MTK)?
-    "NEX", "NOD", "NTS", "NUL", "NXG",
-    "OEM", "ONB",
-    "PAR", "PKV", "PNP", "PPP", "PRI", "PTF", "PVS",
-    "RCA", "RLT", "ROW", "RRR", "RTD", "RTK", "RX_",
-    "SAC", "SIS", "SKK", "SKY", "SMC", "STA", "STD", "SYK",
-    "TBD", "TMA", "TSN", "TVT", "TVW",
+    "NEX", "NOD", "NOV", "NTS", "NUL", "NXG",
+    "ODE", "OEM", "OMS", "ONB", "ORM", "OUT",
+    "PAR", "PBN", "PDI", "PKV", "PNP", "PPP", "PRI", "PTF", "PVS",
+    "RCA", "RGB", "RJT", "RLT", "ROW", "RRR", "RTD", "RTK", "RX_",
+    "SAC", "SBI", "SFX", "SGT", "SIS", "SKK", "SKY", "SMC", "SNC", "SSD", "STA", "STB", "STD", "SYK",
+    "TBD", "TFC", "TMA", "TSN", "TVT", "TVW",
     "UME", "UTV",
-    "VIE", "VID", "VMO", "VST",
+    "VBO", "VIE", "VID", "VMO", "VOR", "VST",
     "WIN", "WRP", "WST", "WYT",
-    "XXE", "XXX", "XYY",
-    "YSP",
+    "XXE", "XXX", "XYK", "XYY",
+    "YHI", "YSP",
     "___"
 );
 
@@ -1403,6 +1457,7 @@ my @ProtectedLogs = (
     "ifconfig",
     "ip_addr",
     "lsb_release",
+    "lsb-release",
     "lsmod",
     "lspci",
     "lspci_all",
@@ -1448,7 +1503,7 @@ my %TypeOrder = (
     "graphics card"=>"A"
 );
 
-my $ALL_DRIVE_VENDORS = "ADATA|A\-DATA|Advantech|AEGO|AMD|Anobit|Apacer|Apple|ASUS|BHT|BIWIN|Chiprex|CLOVER|Colorful|Corsair|Crucial|Dell|DREVO|Espada|ExcelStor Technology|e2e4|faspeed|FASTDISK|Fordisk|FORESEE|Foxline|FUJITSU|Geil|GelL|GIGABYTE|Gigastone|GLOWAY|Goldendisk|Goldenfir|Goldkey|GOODRAM|Gost|HGST|Hitachi|HP|HYPERDISK|i-FlashDisk|IBM-Hitachi|IBM|Indilinx|INTEL|INTENSO|Kingchuxing|KingDian|KingFast|KINGMAX|KingPower|KINGRICH|KINGSHARE|KingSpec|Kingston|LDLC|LDNDISK|Lenovo|LEXAR|Lite-On|LITEON|LITEONIT|LONDISK|Magnetic Data|MARSHAL|Maxtor|MediaMax|MicroData|Micron|Mushkin|Myung|Netac|OCZ|oyunkey|PALIT|Patriot|PHISON|Platinet|PLEXTOR|PNY|PRETEC|QUANTUM|QUMO|Radeon|Ramaxel|Reeinno|RunCore|Samsung Electronics|SAMSUNG|SandForce|SanDisk|Seagate|SenDisk|Shinedisk|SILICONMOTION|SK hynix|Smartbuy|SMI|SPCC|TEAM|Teclast|TCSUNBOW|TEKET|TopSunligt|TOSHIBA|Transcend|Vaseky|Verbatim|WDC|Western Digital|XPG|XUNZHE|Zheino|ZOTAC";
+my $ALL_DRIVE_VENDORS = "ADATA|A\-DATA|Advantech|AEGO|AMD|Anobit|Apacer|Apple|ASUS|BHT|BIWIN|Chiprex|CLOVER|Colorful|Corsair|Crucial|Dell|DOGFISH|DREVO|Espada|ExcelStor Technology|e2e4|faspeed|FASTDISK|Fordisk|FORESEE|Foxline|FUJITSU|Geil|GelL|GIGABYTE|Gigastone|GLOWAY|Goldendisk|Goldenfir|Goldkey|GOODRAM|Gost|HECTRON|HGST|Hitachi|Hoodisk|HP|HYPERDISK|i-FlashDisk|IBM-Hitachi|IBM|Indilinx|INTEL|INTENSO|Kingchuxing|KingDian|KingFast|KINGMAX|KingPower|KINGRICH|KINGSHARE|KingSpec|Kingston|KLEVV|LDLC|LDNDISK|Lenovo|LEXAR|Lite-On|LITEON|LITEONIT|LONDISK|Magnetic Data|MARSHAL|Maxtor|MediaMax|MicroData|Micron|Mushkin|Myung|Netac|OCZ|oyunkey|PALIT|Patriot|PHISON|Platinet|PLEXTOR|PNY|PRETEC|QUANTUM|QUMO|Radeon|Ramaxel|Reeinno|RunCore|Samsung Electronics|SAMSUNG|SandForce|SanDisk|Seagate|SenDisk|Shinedisk|SILICONMOTION|SK hynix|Smartbuy|SMI|SPCC|TEAM|Teclast|TCSUNBOW|TEKET|TopSunligt|TOSHIBA|Transcend|Vaseky|Verbatim|WDC|Western Digital|Wolf Aure|XPG|XUNZHE|Zheino|ZOTAC";
 
 my $ALL_VENDORS = "Brother|Canon|Epson|HP|Hewlett\-Packard|Kyocera|Samsung|Xerox";
 
@@ -1461,6 +1516,7 @@ my $USE_JSON_XS = 0;
 my $USE_IA = 0;
 
 my $HASH_LEN_CLIENT = 32;
+my $UUID_LEN_CLIENT = 32;
 my $SALT_CLIENT = "GN-4w?T]>r3FS/*_";
 
 my $MAX_LOG_SIZE = 1048576; # 1Mb
@@ -1484,10 +1540,16 @@ sub getSha512L($$)
     return substr($Hash, 0, $Len);
 }
 
-sub clientHash($)
+sub clientHash(@)
 {
-    my $Subj = $_[0];
-    return uc(getSha512L($Subj."+".$SALT_CLIENT, $HASH_LEN_CLIENT));
+    my $Subj = shift(@_);
+    
+    my $Len = $HASH_LEN_CLIENT;
+    if(@_) {
+        $Len = shift(@_);
+    }
+    
+    return uc(getSha512L($Subj."+".$SALT_CLIENT, $Len));
 }
 
 sub encryptSerialsInPaths($)
@@ -1531,8 +1593,7 @@ sub encryptSerials(@)
     }
     foreach my $Ser (sort keys(%Serials))
     {
-        if(grep {$Ser eq $_} ("Not Specified", "To Be Filled By O.E.M.", "No Asset Information", "None", "Not Available")
-        or index($Ser, ":")!=-1) {
+        if(grep {$Ser eq $_} ("Not Specified", "To Be Filled By O.E.M.", "No Asset Information", "None", "Not Available")) {
             next;
         }
         
@@ -1545,6 +1606,16 @@ sub encryptSerials(@)
             $Enc = clientHash($Ser);
         }
         
+        if(index($Ser, ":")!=-1 and index($Ser, ".")!=-1)
+        { # 0000:00:1a.0
+            if($Name and grep { $Name eq $_ } ("hwinfo", "usb-devices")) {
+                $Enc = "...";
+            }
+            else {
+                next;
+            }
+        }
+        
         $Content=~s/(\Q$Tag\E\s*[:=]\s*"?)\Q$Ser\E("?\s*\n)/$1$Enc$2/g;
         
         if($Name and $Name eq "hwinfo") {
@@ -1552,6 +1623,28 @@ sub encryptSerials(@)
         }
     }
     return $Content;
+}
+
+sub encryptUUIDs($)
+{
+    my $Content = $_[0];
+    
+    my %UUIDs = ();
+    while($Content=~/([a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12})/gi) {
+        $UUIDs{$1} = 1;
+    }
+    foreach my $UUID (sort keys(%UUIDs))
+    {
+        my $Enc = clientHash(lc($UUID), $UUID_LEN_CLIENT);
+        $Enc=~s/\A(\w{8})(\w{4})(\w{4})(\w{4})(\w{12})\Z/$1-$2-$3-$4-$5/;
+        $Content=~s/\Q$UUID\E/$Enc/g;
+    }
+    return $Content;
+}
+
+sub hideDevDiskUUIDs($)
+{
+    return hideByRegexp($_[0], qr/([a-f\d]{8}\Q\x2d\E[a-f\d]{4}\Q\x2d\E[a-f\d]{4}\Q\x2d\E[a-f\d]{4}\Q\x2d\E[a-f\d]{12})/);
 }
 
 sub encryptWWNs($)
@@ -1581,6 +1674,13 @@ sub hideTags($$)
 {
     my ($Content, $Tags) = @_;
     $Content=~s/(($Tags)\s*[:=]\s*).*?(\n|\Z)/$1...$3/g;
+    return $Content;
+}
+
+sub hideAAC($)
+{
+    my $Content = $_[0];
+    $Content=~s/(AAC\d+: serial ).+?(\n|\Z)/$1...$2/g;
     return $Content;
 }
 
@@ -1711,6 +1811,12 @@ sub exitStatus($)
     if($Opt{"Flatpak"} and -d $TMP_DIR) {
         rmtree($TMP_DIR);
     }
+    if(-d $TMP_PROBE_DIR) {
+        rmtree($TMP_PROBE_DIR);
+    }
+    if(not listDir($LATEST_DIR)) {
+        rmtree($LATEST_DIR);
+    }
     exit($St);
 }
 
@@ -1812,7 +1918,7 @@ sub generateGroup()
     if($Log=~/(Group|Inventory) ID: (\w+)/)
     {
         my $ID = $2;
-        my $GroupLog = "INVENTORY\n=====\n".localtime(time)."\nInventory ID: $ID\n";
+        my $GroupLog = "INVENTORY\n=========\n".localtime(time)."\nInventory ID: $ID\n";
         appendFile($PROBE_LOG, $GroupLog."\n");
     }
 }
@@ -2035,22 +2141,25 @@ sub uploadData()
     # save uploaded probe and its ID
     if($RecentProbe)
     {
-        my $NewProbe = $PROBE_DIR."/".$RecentProbe;
-        
-        if(-d $NewProbe)
+        if($Opt{"SaveUploaded"})
         {
-            printMsg("ERROR", "the probe with ID \'$RecentProbe\' already exists, overwriting ...");
-            unlink($NewProbe."/hw.info.txz");
-        }
-        else {
-            mkpath($NewProbe);
-        }
-        
-        if($Opt{"Source"}) {
-            copy($Pkg, $NewProbe);
-        }
-        else {
-            move($Pkg, $NewProbe);
+            my $NewProbe = $PROBE_DIR."/".$RecentProbe;
+            
+            if(-d $NewProbe)
+            {
+                printMsg("ERROR", "the probe with ID \'$RecentProbe\' already exists, overwriting ...");
+                unlink($NewProbe."/hw.info.txz");
+            }
+            else {
+                mkpath($NewProbe);
+            }
+            
+            if($Opt{"Source"}) {
+                copy($Pkg, $NewProbe);
+            }
+            else {
+                move($Pkg, $NewProbe);
+            }
         }
         
         my $Time = time;
@@ -2179,11 +2288,8 @@ sub setupMonitoring()
 
 sub cleanData()
 {
-    if($Opt{"Clean"})
-    {
-        if(-d $DATA_DIR) {
-            rmtree($DATA_DIR);
-        }
+    if(-d $LATEST_DIR) {
+        rmtree($LATEST_DIR);
     }
 }
 
@@ -2285,24 +2391,7 @@ sub createPackage()
     }
     else
     {
-        if(-d $DATA_DIR)
-        {
-            if(not -f "$DATA_DIR/devices" and not -f "$DATA_DIR/devices.json")
-            {
-                printMsg("ERROR", "\'$DATA_DIR/devices\' file is not found, please make probe first");
-                exitStatus(1);
-            }
-            
-            updateHost($DATA_DIR, "id", $Opt{"PC_Name"});
-            $HWaddr = readHostAttr($DATA_DIR, "hwaddr");
-            
-            $Pkg = $TMP_DIR."/hw.info.txz";
-            
-            chdir(dirname($DATA_DIR));
-            system("tar", "-cJf", $Pkg, basename($DATA_DIR));
-            chdir($ORIG_DIR);
-        }
-        else
+        if(not -d $DATA_DIR)
         {
             if($Admin) {
                 printMsg("ERROR", "can't access '".$DATA_DIR."', please make probe first");
@@ -2312,6 +2401,21 @@ sub createPackage()
             }
             exitStatus(1);
         }
+        
+        if(not -f "$DATA_DIR/devices" and not -f "$DATA_DIR/devices.json")
+        {
+            printMsg("ERROR", "\'$DATA_DIR/devices\' file is not found, please make probe first");
+            exitStatus(1);
+        }
+        
+        updateHost($DATA_DIR, "id", $Opt{"PC_Name"});
+        $HWaddr = readHostAttr($DATA_DIR, "hwaddr");
+        
+        $Pkg = $TMP_DIR."/hw.info.txz";
+        
+        chdir(dirname($DATA_DIR));
+        system("tar", "-cJf", $Pkg, basename($DATA_DIR));
+        chdir($ORIG_DIR);
     }
     
     return ($Pkg, $HWaddr);
@@ -2831,6 +2935,7 @@ sub probeHW()
         $DevFiles = hideLVM($DevFiles);
         $DevFiles = hideByRegexp($DevFiles, qr/\/([^\s\/]+?)-vg/);
         $DevFiles = hidePaths($DevFiles);
+        $DevFiles = encryptUUIDs($DevFiles);
         
         writeLog($LOG_DIR."/dev", $DevFiles);
     }
@@ -3241,6 +3346,8 @@ sub probeHW()
                     { # pci
                         $C = devID($1, $2, $3);
                     }
+                    
+                    $Device{$Key} = $Val;
                 }
             }
             elsif($Key eq "Resolution"
@@ -3549,6 +3656,13 @@ sub probeHW()
         #    }
         #}
         
+        if($Bus eq "none")
+        {
+            if($Device{"Module Alias"}=~/\Aplatform:/) {
+                $Bus = "platform";
+            }
+        }
+        
         if($Bus eq "none") {
             next;
         }
@@ -3845,6 +3959,7 @@ sub probeHW()
         delete($Device{"Attached"});
         delete($Device{"AllFiles"});
         delete($Device{"Files"});
+        delete($Device{"Module Alias"});
         
         if($C) {
             $Device{"Class"} = $C;
@@ -3930,6 +4045,8 @@ sub probeHW()
         $Udevadm = runCmd("udevadm info --export-db 2>/dev/null");
         $Udevadm = hideTags($Udevadm, "ID_NET_NAME_MAC|ID_SERIAL|ID_SERIAL_SHORT|DEVLINKS|ID_WWN|ID_WWN_WITH_EXTENSION");
         $Udevadm=~s/(by\-id\/(ata|usb|nvme|wwn)\-).+/$1.../g;
+        $Udevadm = encryptUUIDs($Udevadm);
+        $Udevadm = encryptSerials($Udevadm, "SERIAL_NUMBER");
         if(enabledLog("udev-db")) {
             writeLog($LOG_DIR."/udev-db", $Udevadm);
         }
@@ -4264,6 +4381,7 @@ sub probeHW()
             }
             
             $Lsusb=~s/(iSerial\s+\d+\s*)[^\s]+$/$1.../mg;
+            $Lsusb = encryptUUIDs($Lsusb);
             
             if(length($Lsusb)<60 and $Lsusb=~/unable to initialize/i) {
                 $Lsusb = "";
@@ -4478,7 +4596,7 @@ sub probeHW()
         {
             listProbe("logs", "usb-devices");
             $Usb_devices = runCmd("usb-devices -v 2>&1");
-            $Usb_devices = encryptSerials($Usb_devices, "SerialNumber");
+            $Usb_devices = encryptSerials($Usb_devices, "SerialNumber", "usb-devices");
         }
         
         if($Opt{"HWLogs"}) {
@@ -5096,6 +5214,10 @@ sub probeHW()
                 elsif($Key eq "Thread Count") {
                     $CPU_Threads += $Val;
                 }
+            }
+            
+            if(not $Device{"Vendor"}) {
+                next;
             }
             
             $CPU_Sockets += 1;
@@ -6262,6 +6384,8 @@ sub probeHW()
         $Dmesg = hideIPs($Dmesg);
         $Dmesg = hideMACs($Dmesg);
         $Dmesg = hidePaths($Dmesg);
+        $Dmesg = hideAAC($Dmesg);
+        $Dmesg = encryptUUIDs($Dmesg);
         
         if($Opt{"HWLogs"}) {
             writeLog($LOG_DIR."/dmesg", $Dmesg);
@@ -6329,35 +6453,34 @@ sub probeHW()
     
     if((not $Sys{"Model"} or $Sys{"Model"} eq "rpi") and $Sys{"Arch"}=~/arm|aarch/i)
     {
-        if(index($Dmesg, "Machine")!=-1)
+        if($Dmesg=~/(Machine(| model)|Hardware name): (.+)/)
         {
-            if($Dmesg=~/Machine(| model): (.+)/)
-            {
-                $Sys{"Model"} = $2;
-                
-                if($Sys{"Model"}=~/(Orange Pi|Banana Pi|Raspberry Pi|Odroid|rockchip)/i) {
-                    $Sys{"Type"} = "system on chip";
-                }
-                if($Sys{"Model"}=~/\A(Raspberry Pi) /) {
-                    $Sys{"Vendor"} = "Raspberry Pi Foundation";
-                }
-                elsif($Sys{"Model"}=~/\Arockchip,(.+)\Z/)
-                {
-                    $Sys{"Model"} = $1;
-                    $Sys{"Vendor"} = "Rockchip";
-                    $Sys{"System"} = "android";
-                }
-                elsif($Sys{"Model"}=~s/\A(Xunlong|Hardkernel) //) {
-                    $Sys{"Vendor"} = $1;
-                }
-                elsif($Sys{"Model"}=~/Pine64/)
-                {
-                    $Sys{"Type"} = "system on chip";
-                    $Sys{"Vendor"} = "Pine Microsystems";
-                }
-                
-                $Sys{"Model"}=~s/\s+Board\Z//i;
+            $Sys{"Model"} = $3;
+            
+            if($Sys{"Model"}=~/(Orange Pi|Banana Pi|Raspberry Pi|Odroid|rockchip)/i) {
+                $Sys{"Type"} = "system on chip";
             }
+            if($Sys{"Model"}=~/\A(Raspberry Pi) /) {
+                $Sys{"Vendor"} = "Raspberry Pi Foundation";
+            }
+            elsif($Sys{"Model"}=~/\Arockchip,(.+)\Z/)
+            {
+                $Sys{"Model"} = $1;
+                $Sys{"Vendor"} = "Rockchip";
+                $Sys{"System"} = "android";
+            }
+            elsif($Sys{"Model"}=~s/\A(Xunlong|Hardkernel|FriendlyElec|Radxa) //)
+            {
+                $Sys{"Vendor"} = $1;
+                $Sys{"Type"} = "system on chip";
+            }
+            elsif($Sys{"Model"}=~/Pine64/)
+            {
+                $Sys{"Type"} = "system on chip";
+                $Sys{"Vendor"} = "Pine Microsystems";
+            }
+            
+            $Sys{"Model"}=~s/\s+Board\Z//i;
         }
     }
     
@@ -6387,6 +6510,7 @@ sub probeHW()
         {
             $XLog = hideTags($XLog, "Serial#");
             $XLog = hidePaths($XLog);
+            $XLog = encryptUUIDs($XLog);
             if(my $HostName = $ENV{"HOSTNAME"}) {
                 $XLog=~s/ $HostName / NODE /g;
             }
@@ -6935,7 +7059,7 @@ sub probeHW()
         }
     }
     
-    if(not $Sys{"Microarch"} and $CpuInfo)
+    if($CpuInfo)
     {
         my ($CPU_Vendor, $CPU_Family, $CPU_ModelNum) = ();
         
@@ -6956,9 +7080,43 @@ sub probeHW()
             elsif($Attr eq "model") {
                 $CPU_ModelNum = $Val;
             }
+            elsif($Attr eq "cpu model")
+            {
+                if(not $CPU_ID and $Val=~s/\A(MIPS) //)
+                {
+                    my %CpuDev = ();
+                    $CpuDev{"Vendor"} = $1;
+                    $CpuDev{"Device"} = $Val;
+                    $CpuDev{"Type"} = "cpu";
+                    $CPU_ID = "cpu:".fmtID(devID(nameID($CpuDev{"Vendor"}), $CpuDev{"Device"}));
+                    $HW{$CPU_ID} = \%CpuDev;
+                }
+            }
+            elsif($Attr eq "machine")
+            {
+                if(not $Sys{"Vendor"} and $Val=~s/\A(TP-LINK) //)
+                {
+                    $Sys{"Vendor"} = $1;
+                    $Sys{"Model"} = $Val;
+                }
+            }
+            elsif($Attr eq "system type")
+            {
+                if(not $Board_ID and $Val=~s/\A(Qualcomm) //)
+                {
+                    my %BoardDev = ();
+                    $BoardDev{"Vendor"} = $1;
+                    $BoardDev{"Device"} = $Val;
+                    $BoardDev{"Type"} = "motherboard";
+                    $Board_ID = "board:".fmtID(devID(nameID($BoardDev{"Vendor"}), $BoardDev{"Device"}));
+                    $HW{$Board_ID} = \%BoardDev;
+                }
+            }
         }
         
-        $Sys{"Microarch"} = detectMicroarch($CPU_Vendor, $CPU_Family, $CPU_ModelNum);
+        if(not $Sys{"Microarch"}) {
+            $Sys{"Microarch"} = detectMicroarch($CPU_Vendor, $CPU_Family, $CPU_ModelNum);
+        }
     }
     
     my $Meminfo = "";
@@ -7069,6 +7227,8 @@ sub probeHW()
         $Lsblk = hideByRegexp($Lsblk, qr/(.+?)\s+[^\s]+?\s+crypt\s+/);
         $Lsblk = hidePaths($Lsblk);
         $Lsblk = hideLVM($Lsblk);
+        $Lsblk = encryptUUIDs($Lsblk);
+        $Lsblk = hideByRegexp($Lsblk, qr/\s([a-f\d]{8})\-\d\d\n/); # PARTUUID
         writeLog($LOG_DIR."/lsblk", $Lsblk);
     }
     
@@ -7086,7 +7246,7 @@ sub probeHW()
                 $Sys{"Dual_boot"} = 1;
             }
             
-            if($L[0]=~/\A(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)\Z/)
+            if($L[0]=~/\A(sd[a-z]+|nvme\d+n\d+|mmcblk\d+|mtdblock\d+)\Z/)
             {
                 my $HDD_File = "/dev/".$L[0];
                 my $HDD_Size = $L[1];
@@ -7224,6 +7384,7 @@ sub probeHW()
         $Fstab = hideIPs($Fstab);
         $Fstab = hideUrls($Fstab);
         $Fstab = hidePass($Fstab);
+        $Fstab = encryptUUIDs($Fstab);
         $Fstab=~s/LABEL=[^\s]+/LABEL=XXXX/g;
         $Fstab=~s/sshfs#.+/sshfs.../g;
         $Fstab=~s/#.*\n//g;
@@ -7388,6 +7549,7 @@ sub runSmartctl(@)
     }
     
     $Output = encryptSerials($Output, "Serial Number");
+    $Output = encryptSerials($Output, "Serial number");
     $Output = hideWWNs($Output);
     # $Output=~s/\A.*?(\=\=\=)/$1/sg;
     
@@ -7454,7 +7616,7 @@ sub registerBattery($)
             $Device->{"Size"} = sprintf("%.0f", $1).$2;
         }
         $ID = devID(nameID($Device->{"Vendor"}), lc($Device->{"Device"}), $Device->{"Technology"}, $Device->{"Size"});
-        if($Device->{"Serial"}) {
+        if($Device->{"Serial"} and $Device->{"Serial"} ne " ") {
             $ID = devID($ID, "serial", $Device->{"Serial"});
         }
     }
@@ -8236,7 +8398,7 @@ sub guessDriveKind($$)
 }
 
 sub nonVendor($) {
-    return (length($_[0])<2 or $_[0]=~/\A\d+GB\Z/ or grep { lc($_[0]) eq lc($_) } ("SSD", "mSATA", "SATAII", "SATAIII", "SATA", "SATA2", "SATA3", "PATA", "M.2", "PCIe", "Series"));
+    return (length($_[0])<2 or $_[0]=~/\A\d+GB\Z/ or grep { lc($_[0]) eq lc($_) } ("SSD", "mSATA", "SATAII", "SATAIII", "SATA", "SATA2", "SATA3", "PATA", "M.2", "PCIe", "Series", "SC2", "SB"));
 }
 
 sub fixDrive($)
@@ -8419,9 +8581,9 @@ sub guessDriveVendor($)
         }
     }
     
-    if($Name=~/\A(MT|MSH|P3|P3D|T|PA25)\-(60|64|120|128|240|256|512|1TB|2TB)\Z/
-    or grep { $Name eq $_ } ("V-32", "NT-256", "NT-512", "Q-360"))
-    { # MT-64 MSH-256 P3-128 P3D-240 P3-2TB T-60 V-32 PA25-128
+    if($Name=~/\A(MT|MSH|NT|P3|P3D|P4|T|PA25)\-(60|64|120|128|240|256|512|960|1TB|2TB)\Z/
+    or grep { $Name eq $_ } ("V-32", "NT-256", "NT-512", "Q-360", "Q-720"))
+    { # MT-64 MSH-256 P3-128 P3D-240 P3-2TB T-60 V-32 PA25-128 NT-64
         return "KingSpec";
     }
 
@@ -8632,7 +8794,7 @@ sub emptyVal($)
 {
     my $Val = $_[0];
     
-    if($Val=~/\A[\[\(]*(not specified|not available|out of spec|not defined|No Device Manufacturer|No Device Part Number|invalid|error|unkn|unknown|undefined|unknow|uknown|empty|n\/a|none|default string|vendor|device|unknown vendor|default|customer|model|_|unde|null|reserved|Unknown \(0\)|[\.\}\*\_]+)[\)\]]*\Z/i
+    if($Val=~/\A[\[\(]*(not specified|not available|out of spec|not defined|No Device Manufacturer|No Device Part Number|invalid|error|unkn|unknown|undefined|unknow|uknown|empty|n\/a|none|default string|vendor|device|unknown vendor|default|customer|model|_|unde|null|reserved|Unknown \(0\)|\?|unknown unknown|[\.\}\*\_]+)[\)\]]*\Z/i
     or $Val=~/(\A|\b|\d)(to be filled|unclassified device|not defined|bad index|does not exist|unkn|uknown|default)(\b|\Z)/i) {
         return 1;
     }
@@ -8720,7 +8882,7 @@ sub nameID(@)
         $Name=~s/\s*\[[^\[\]]*\]//g;
     }
     
-    while ($Name=~s/(\s*\,\s*|\s+)(Inc|Ltda|Ltd|Co|GmbH|Corp|Pte|LLC|Sdn|Bhd|BV|AG|RSS|PLC|s\.r\.l\.|srl|S\.P\.A|B\.V|S\.A|s r\. o|s\.r\.o|z\.s\.p\.o|Ind|e\.V|a\.s|Co\.Ltd|Int\'l|Intl|I\.T\.G)(\.|\.*\Z)//gi) {}
+    while ($Name=~s/(\s*\,\s*|\s+)(Inc|Ltda|Ltd|Co|GmbH|Corp|Tech\.|Pte|LLC|Sdn|Bhd|BV|AG|RSS|PLC|s\.r\.l\.|srl|S\.P\.A|B\.V|S\.A|s r\. o|s\.r\.o|z\.s\.p\.o|Ind|e\.V|a\.s|Co\.Ltd|Int\'l|Intl|I\.T\.G)(\.|\.*\Z)//gi) {}
     
     $Name=~s/,?\s+[a-z]{2,4}\.//gi;
     $Name=~s/,(.+)\Z//gi;
@@ -8779,7 +8941,7 @@ sub fixModel($$$)
     
     if($Vendor eq "Hewlett-Packard")
     {
-        $Model=~s/\AHP\s+//g;
+        $Model=~s/\AHP\s+//gi;
         $Model=~s/\s+Notebook PC\s*\Z//gi;
         $Model=~s/PAVILION/Pavilion/gi;
         $Model=~s/Envy/ENVY/gi;
@@ -9022,7 +9184,7 @@ sub fixFFByCPU($)
     my $CPU = $_[0];
     if($Sys{"Type"}!~/$DESKTOP_TYPE|$SERVER_TYPE/)
     {
-        if($CPU=~/Celeron CPU E\d+|Pentium (CPU G\d+|D CPU|Dual-Core CPU E\d+) |Core 2 CPU \d+ |Core 2 Duo CPU E\d+|Core 2 Quad CPU Q\d+|Core i\d CPU \d+ |Core i\d-\d+ CPU|CPU Q(9400|8200)|Athlon 64 X2 Dual Core Processor \d+|Athlon X4 \d+|Athlon 64 Processor \d+\+|Phenom II X[24] B?\d+|FX-\d+ Six-Core|A10\-\d+K|Xeon CPU (\d+|[EXW]\d{4}|(E5|D)-\d{4}) |Core i7-\d+ CPU|FX-\d+ Eight-Core|Atom CPU C3508/ and $CPU!~/Mobile/) {
+        if($CPU=~/Celeron CPU E\d+|Pentium (CPU G\d+|D CPU|Dual-Core CPU E\d+) |Core 2 CPU \d+ |Core 2 Duo CPU E\d+|Core 2 Quad CPU Q\d+|Core i\d CPU \d+ |Core i\d-\d+ CPU|CPU Q(9400|8200)|Athlon 64 X2 Dual Core Processor \d+|Athlon X4 \d+|Athlon 64 Processor \d+\+|Phenom II X[24] B?\d+|FX-\d+ Six-Core|A10\-\d+K|Xeon CPU (\d+|[EXW]\d{4}|(E5|D)-\d{4}) |Core i7-\d+ CPU|FX-\d+ Eight-Core|Atom CPU C3508|Ryzen 5 1600/ and $CPU!~/Mobile/) {
             $Sys{"Type"} = "desktop";
         }
     }
@@ -9056,7 +9218,7 @@ sub fixFFByBoard($)
     my $Board = $_[0];
     if($Sys{"Type"}!~/$DESKTOP_TYPE|$SERVER_TYPE/)
     {
-        if($Board=~/\b(D510MO|GA-K8NMF-9|DG965RY|DG33BU|D946GZIS|N3150ND3V|D865GSA|DP55WG|H61MXT1|D875PBZ|F2A55|Z68XP-UD3|Z77A-GD65|M4A79T|775Dual-880Pro|P4Dual-915GL|P4i65GV|D5400XS|D201GLY|MicroServer|IPPSB-DB|MS-AA53|C2016-BSWI-D2|N3160TN|D915PBL|Aptio CRB|EIRD-SAM|D865PERL|D410PT|D525MW|D945GCNL|BSWI-D2|B202|D865GBF|G1-CPU-IMP)\b/) {
+        if($Board=~/\b(D510MO|GA-K8NMF-9|DG965RY|DG33BU|D946GZIS|N3150ND3V|D865GSA|DP55WG|H61MXT1|D875PBZ|F2A55|Z68XP-UD3|Z77A-GD65|M4A79T|775Dual-880Pro|P4Dual-915GL|P4i65GV|D5400XS|D201GLY|MicroServer|IPPSB-DB|MS-AA53|C2016-BSWI-D2|N3160TN|D915PBL|EIRD-SAM|D865PERL|D410PT|D525MW|D945GCNL|BSWI-D2|B202|D865GBF|G1-CPU-IMP|Aptio CRB)\b/) {
             $Sys{"Type"} = "desktop";
         }
     }
@@ -9103,7 +9265,8 @@ sub fixFFByModel($$)
     
     if($Sys{"Type"}!~/$SERVER_TYPE/)
     {
-        if($M=~/X10DRG-O\+-CPU/) {
+        if($M=~/X10DRG-O\+-CPU|ML10Gen/
+        or ($V=~/Neousys/i and $M=~/Nuvo/)) {
             $Sys{"Type"} = "server";
         }
     }
@@ -9125,7 +9288,7 @@ sub fixFFByModel($$)
     
     if($Sys{"Type"} ne "nettop")
     {
-        if($M=~/MS-B120/i) {
+        if($M=~/MS-B120|IdeaCentre Q150/i) {
             $Sys{"Type"} = "nettop";
         }
     }
@@ -9136,25 +9299,37 @@ sub fixFFByModel($$)
         if(($V=~/Intel/i and $M=~/\ANUC\d/)
         or ($V=~/Radiant/i and $M=~/P845/)
         or ($V=~/ZOTAC/i and $M=~/\AZBOX/)
+        or ($V=~/Beelink/i and $M=~/\ASII/)
+        or ($V=~/Orbsmart/i and $M=~/\AAW/)
+        or ($V=~/Compulab/i and $M=~/\A(Intense|fitlet|Airtop)/)
         or $M=~/\AZBOX\-/
-        or $M=~/Macmini|ESPRIMO Q510|MMLP5AP-SI|Mini PC/) {
+        or $M=~/Macmini|ESPRIMO Q510|MMLP5AP-SI|Mini PC|TL-WR842N|Thin Client|Thin Mini|VMac mini|TERRA_PC|Aptio CRB|Propc Nano|XS35V5/) {
             $Sys{"Type"} = "mini pc";
         }
     }
     
     if($Sys{"Type"} ne "all in one")
     {
-        if($M=~/(IdeaCentre B)/) {
+        if($M=~/( AiO PC)/
+        or $M=~/\A(MS-6657)\Z/
+        or $V eq "AIO"
+        or ($V=~/Apple/i and $M=~/\AiMac/)
+        or ($V=~/Lenovo/i and $M=~/\A(S310|IdeaCentre B|ThinkCentre M90z) /)
+        or ($V=~/Hewlett/i and $M=~/ Aio\Z/i)
+        or ($V=~/MiTAC/i and $M=~/\AAIO /)) {
             $Sys{"Type"} = "all in one";
         }
     }
     
     if($Sys{"Type"} ne "tablet")
     {
-        if($M=~/(Hi10 .+ tablet|Visconte4U)/i
-        or ($V=~/ONDA/i and $M=~/Tablet/i)
+        if($M=~/(Hi10 .+ tablet|Visconte4U|TERRA_PAD)/i
+        or ($V=~/ONDA/i and $M=~/Tablet|V919/i)
         or ($V=~/Microsoft/i and $M=~/Surface/i)
-        or ($V=~/Hampoo/i and $M=~/\A(E4D6|D4D6|I1D6|P02BD6)/i)) {
+        or ($V=~/Hampoo/i and $M=~/\A(E4D6|D4D6|I1D6|P02BD6)/i)
+        or ($V=~/Acer/i and $M=~/ICONIA Tab/i)
+        or ($V=~/TMAX/i and $M=~/TM/i)
+        or ($V=~/Wacom/i and $M=~/Citiq/i)) {
             $Sys{"Type"} = "tablet";
         }
     }
@@ -9172,7 +9347,7 @@ sub fixFFByMonitor($)
     
     if($Sys{"Type"}!~/$MOBILE_TYPE/)
     {
-        if($Mon=~/LGD02E9|SEC3445|LPLA500|CMO1680/) {
+        if($Mon=~/LGD02E9|SEC3445|LPLA500|CMO1680|LGD018B/) {
             $Sys{"Type"} = "notebook";
         }
     }
@@ -9205,7 +9380,7 @@ sub fixFFByDisk($)
     my $Disk = $_[0];
     if($Sys{"Type"}!~/$DESKTOP_TYPE|$SERVER_TYPE/)
     {
-        if($Disk=~/HD321KJ|ST3500413AS/) {
+        if($Disk=~/HD321KJ|ST3500413AS|ST2000DM001|WD205BA/) {
             $Sys{"Type"} = "desktop";
         }
     }
@@ -9312,7 +9487,7 @@ sub fixChassis()
             $Sys{"Model"} = "Nexus 7";
             $Sys{"System"} = "android";
         }
-        elsif($Sys{"Kernel"}=~/\-(LuisKERNEL|Dark-Ages)\-|\-perf\+|SM-N9500|lineageos/i)
+        elsif($Sys{"Kernel"}=~/\-(LuisKERNEL|Dark-Ages)\-|\-perf\+|SM-N9500|lineageos|FKernel-v/i)
         {
             $Sys{"Type"} = "phone";
             $Sys{"System"} = "android";
@@ -9354,6 +9529,7 @@ sub probeHWaddr()
             $IFConfig = runCmd("ifconfig -a 2>&1");
             $IFConfig = hideIPs($IFConfig);
             $IFConfig = encryptMACs($IFConfig);
+            $IFConfig=~s/(inet6 |inet |netmask |broadcast )[^\s]+/$1\XXX/g;
             
             if($Opt{"HWLogs"}) {
                 writeLog($LOG_DIR."/ifconfig", $IFConfig);
@@ -9366,6 +9542,7 @@ sub probeHWaddr()
             {
                 $IPaddr = hideIPs($IPaddr);
                 $IPaddr = encryptMACs($IPaddr);
+                $IPaddr=~s/(inet6 |inet |brd )[^\s]+/$1\XXX/g;
                 $IFConfig = ipAddr2ifConfig($IPaddr);
                 
                 if($Opt{"HWLogs"}) {
@@ -9771,7 +9948,21 @@ sub probeDistr()
         }
     }
     
-    my ($Name, $Release, $FName) = ();
+    my $LSB_Rel_F = "";
+    
+    if($Opt{"FixProbe"}) {
+        $LSB_Rel_F = readFile($FixProbe_Logs."/lsb-release");
+    }
+    else
+    {
+        listProbe("logs", "lsb-release");
+        $LSB_Rel_F = readFile("/etc/lsb-release");
+        if($Opt{"HWLogs"} and $LSB_Rel_F) {
+            writeLog($LOG_DIR."/lsb-release", $LSB_Rel_F);
+        }
+    }
+    
+    my ($Name, $Release) = ();
     
     if($LSB_Rel)
     { # Desktop
@@ -9794,10 +9985,6 @@ sub probeDistr()
         
         if($Release and $Name) {
             $Release=~s/\A$Name[\s\-]+//i;
-        }
-        
-        if($LSB_Rel=~/NAME:\s*(.*)/) {
-            $FName = $1;
         }
         
         if($LSB_Rel=~/Description:\s*(.*)/) {
@@ -9856,13 +10043,29 @@ sub probeDistr()
         and $Release=~/\A\d\d\d\d\d\d\d\d\Z/) {
             return ("opensuse-".$Release, "");
         }
-        elsif($Descr=~/\AMaui/i) {
-            $Name = $Descr;
+        elsif($Descr=~/\A(Maui|KDE neon|RED OS)/i) {
+            $Name = $1;
+        }
+        elsif($Descr=~/\A(antiX)-(\d+)/i)
+        {
+            $Name = $1;
+            $Release = $2;
         }
     }
     
     if(grep { $Release eq $_ } ("amd64", "x86_64")) {
         $Release = undef;
+    }
+    
+    if($LSB_Rel_F)
+    {
+        if($LSB_Rel=~/DISTRIB_ID:\s*(.*)/) {
+            $Name = $1;
+        }
+        
+        if($LSB_Rel=~/DISTRIB_RELEASE:\s*(.*)/) {
+            $Release = lc($1);
+        }
     }
     
     if((not $Name or not $Release) and $OS_Rel)
@@ -9876,21 +10079,28 @@ sub probeDistr()
         if($OS_Rel=~/\bNAME=\s*[\"\']*([^"'\n]+)/)
         {
             my $RealName = $1;
-            if(grep {$RealName eq $_} ("Peppermint", "Pop!_OS", "KDE neon")) {
-                $Name = $RealName;
+            if($RealName=~/(Peppermint|Pop\!_OS|KDE neon|Acronis Cyber Infrastructure)/) {
+                $Name = $1;
             }
         }
         
         if($OS_Rel=~/\bPRETTY_NAME=\s*[\"\']*([^"'\n]+)/)
         {
             my $PrettyName = $1;
-            if(grep {$PrettyName=~/$_/} ("OpenVZ")) {
-                $Name = "openvz";
+            if($PrettyName=~/(OpenVZ)/) {
+                $Name = $1;
             }
         }
         
         if($OS_Rel=~/\bVERSION_ID=\s*[\"\']*([^"'\n]+)/) {
             $Release = lc($1);
+        }
+        
+        if($Name=~/Acronis/)
+        {
+            if($OS_Rel=~/\bVERSION=\s*[\"\']*([^"'\n]+)/) {
+                $Release = lc($1);
+            }
         }
         
         if($Release eq "n/a") {
@@ -9911,6 +10121,9 @@ sub probeDistr()
     {
         $Release = undef;
         $Name = "Virtuozzo";
+    }
+    elsif($Name eq "blackpantheros") {
+        $Name = "blackpanther-os";
     }
     
     $Name = shortOS($Name);
@@ -10114,6 +10327,9 @@ sub readHost($)
     $Sys{"Ram_total"} = undef;
     
     $Sys{"Filesystem"} = undef;
+    
+    $Sys{"System"} = undef;
+    $Sys{"Systemrel"} = undef;
 }
 
 sub getUser()
@@ -10169,6 +10385,8 @@ sub writeLogs()
             $Dmesg_Old = hideIPs($Dmesg_Old);
             $Dmesg_Old = hideMACs($Dmesg_Old);
             $Dmesg_Old = hidePaths($Dmesg_Old);
+            $Dmesg_Old = hideAAC($Dmesg_Old);
+            $Dmesg_Old = encryptUUIDs($Dmesg_Old);
             writeLog($LOG_DIR."/dmesg.1", $Dmesg_Old);
         }
     }
@@ -10188,6 +10406,7 @@ sub writeLogs()
         
         $XLog_Old = hideTags($XLog_Old, "Serial#");
         $XLog_Old = hidePaths($XLog_Old);
+        $XLog_Old = encryptUUIDs($XLog_Old);
         if(my $HostName = $ENV{"HOSTNAME"}) {
             $XLog_Old=~s/ $HostName / NODE /g;
         }
@@ -10238,6 +10457,7 @@ sub writeLogs()
             listProbe("logs", "grub.cfg");
             my $GrubCfg = readFile("/boot/grub2/grub.cfg");
             $GrubCfg = hidePaths($GrubCfg);
+            $GrubCfg = encryptUUIDs($GrubCfg);
             writeLog($LOG_DIR."/grub.cfg", $GrubCfg);
         }
     }
@@ -10250,6 +10470,8 @@ sub writeLogs()
         $BootLog=~s&(Mounted|Mounting)\s+/.+&$1 XXXXX&g;
         $BootLog=~s&(Setting hostname\s+).+:&$1XXXXX:&g;
         $BootLog = hideLVM($BootLog);
+        $BootLog = encryptUUIDs($BootLog);
+        $BootLog = hideDevDiskUUIDs($BootLog);
         writeLog($LOG_DIR."/boot.log", $BootLog);
     }
     
@@ -10489,6 +10711,7 @@ sub writeLogs()
         my $NmCli = runCmd("nmcli c 2>&1");
         $NmCli=~s/.+\s+([^\s]+\s+[^\s]+\s+[^\s]+\s*\n)/XXX   $1/g;
         $NmCli=~s/\AXXX /NAME/g;
+        $NmCli = encryptUUIDs($NmCli);
         if($NmCli) {
             writeLog($LOG_DIR."/nmcli", $NmCli);
         }
@@ -10505,6 +10728,7 @@ sub writeLogs()
                 $Fdisk = "";
             }
             $Fdisk = hidePaths($Fdisk);
+            $Fdisk = hideTags($Fdisk, "Disk identifier");
             writeLog($LOG_DIR."/fdisk", $Fdisk);
         }
     }
@@ -10599,6 +10823,8 @@ sub writeLogs()
             my $Sctl = runCmd("systemctl 2>/dev/null");
             $Sctl=~s/( of user)\s+\Q$SessUser\E/$1 USER/g;
             $Sctl = decorateSystemd($Sctl);
+            $Sctl = encryptUUIDs($Sctl);
+            $Sctl = hideDevDiskUUIDs($Sctl);
             writeLog($LOG_DIR."/systemctl", $Sctl);
         }
     }
@@ -10784,6 +11010,7 @@ sub writeLogs()
         $SystemdAnalyze .= "\n";
         $SystemdAnalyze .= runCmd("systemd-analyze blame 2>/dev/null");
         $SystemdAnalyze = decorateSystemd($SystemdAnalyze);
+        $SystemdAnalyze = hideDevDiskUUIDs($SystemdAnalyze);
         writeLog($LOG_DIR."/systemd-analyze", $SystemdAnalyze);
     }
     
@@ -10979,6 +11206,7 @@ sub writeLogs()
     {
         listProbe("logs", "xvinfo");
         my $XVInfo = runCmd("xvinfo 2>&1");
+        $XVInfo = encryptUUIDs($XVInfo);
         writeLog($LOG_DIR."/xvinfo", clearLog_X11($XVInfo));
     }
     
@@ -11055,11 +11283,8 @@ sub writeLogs()
         
         if($Opt{"DecodeACPI"})
         {
-            if(-s "$LOG_DIR/acpidump")
-            {
-                if(decodeACPI("$LOG_DIR/acpidump", "$LOG_DIR/acpidump_decoded")) {
-                    unlink("$LOG_DIR/acpidump");
-                }
+            if(-s "$LOG_DIR/acpidump") {
+                decodeACPI("$LOG_DIR/acpidump", "$LOG_DIR/acpidump_decoded");
             }
         }
     }
@@ -11165,10 +11390,6 @@ sub decodeACPI($$)
     chdir($ORIG_DIR);
     
     writeFile($Output, $DSL);
-    
-    if($DSL) {
-        unlink($Dump);
-    }
     
     rmtree($TmpDir);
     
@@ -11675,7 +11896,7 @@ sub checkHW()
             my $Cmd = "hdparm -t $Dr";
             my $Out = runCmd($Cmd);
             $Out=~s/\A\n\Q$Dr\E\:\n//;
-            $HDD_Read .= $HddInfo->{"Vendor"}." ".$HddInfo->{"Device"}."\n";
+            $HDD_Read .= "Drive ".$HddInfo->{"Vendor"}." ".$HddInfo->{"Device"}."\n";
             $HDD_Read .= "$Cmd\n";
             $HDD_Read .= $Out."\n";
             
@@ -12143,6 +12364,9 @@ sub downloadProbe($$)
             elsif($Url eq "index.php?probe=$ID") {
                 $Line=~s/\Q$Url\E/index.html/;
             }
+            elsif($Url=~/\A#/) {
+                # Do nothing
+            }
             else {
                 $Line=~s/\Q$Url\E/$URL\/$Url/g;
             }
@@ -12221,72 +12445,129 @@ sub importProbes($)
     if(not -d $Dir)
     {
         mkpath($Dir);
-        setPublic($Dir);
+        if(not $Opt{"Group"}) {
+            setPublic($Dir);
+        }
     }
 
     my ($Imported, $OneProbe) = (undef, undef);
-
+    
     my $IndexInfo = eval ( readFile($Dir."/index.info") ) || {};
-
-    my @Paths = ();
-    if(-d $PROBE_DIR)
-    {
-        foreach my $P (listDir($PROBE_DIR)) {
-            push(@Paths, $PROBE_DIR."/".$P);
-        }
-    }
     
-    my $OldProbes = getOldProbeDir();
-    if($OldProbes and -d $OldProbes)
-    { # ROSA: changed probe place in 1.3
-        foreach my $P (listDir($OldProbes)) {
-            push(@Paths, $OldProbes."/".$P);
-        }
-    }
-    
-    foreach my $D (@Paths)
+    if(my $Inv = $Opt{"Group"})
     {
-        my $P = basename($D);
-        if($P eq "LATEST" or not -d $D or not listDir($D)) {
-            next;
-        }
-        
-        if(defined $IndexInfo->{"SkipProbes"}{$P}) {
-            next;
-        }
-        
-        my $To = $Dir."/".$P;
-        if(not -e $To or not -e "$To/logs")
+        my $TopPage = downloadFileContent("$URL/index.php?view=computers&inventory=".$Inv);
+        my @Computers = ($TopPage=~/Computer ([a-f\d]+) /g);
+        foreach my $C (@Computers)
         {
-            if(downloadProbe($P, $To)!=-1)
+            print "Computer $C\n";
+            
+            my $ComputerPage = downloadFileContent("$URL/index.php?computer=".$C."&inventory=".$Inv);
+            my @ComputerProbes = ($ComputerPage=~/ Probe ([a-f\d]+) /g);
+            my $MaxElems = 2;
+            
+            if($#ComputerProbes>$MaxElems-1) {
+                splice(@ComputerProbes, $MaxElems);
+            }
+            
+            foreach my $P (@ComputerProbes)
             {
-                my $TmpDir = $TMP_DIR."/hw.info";
-                system("tar -xf $D/* -C $TMP_DIR");
-                
-                my %Prop = ();
-                foreach my $Line (split(/\n/, readFile($TmpDir."/host")))
-                {
-                    if($Line=~/(\w+):(.*)/) {
-                        $Prop{$1} = $2;
-                    }
+                if(defined $IndexInfo->{"SkipProbes"}{$P}) {
+                    next;
                 }
                 
-                my @DStat = stat($TmpDir);
-                $Prop{"date"} = $DStat[9]; # last modify time
-                $Prop{"hwaddr"} = uc($Prop{"hwaddr"});
-                writeFile($To."/probe.info", Data::Dumper::Dumper(\%Prop));
-                $Imported = $P;
-                setPublic($To, "-R");
-                rmtree($TmpDir);
+                my $To = $Dir."/".$P;
+                if(not -e $To or not -e "$To/logs")
+                {
+                    if(downloadProbe($P, $To)!=-1)
+                    {
+                        my %Prop = ();
+                        $Prop{"hwaddr"} = uc($C);
+                        
+                        if($ComputerPage=~/Probe $P (.+?) -->/)
+                        {
+                            foreach (split(";", $1))
+                            {
+                                if(/\A(\w+?):'(.+)'\Z/) {
+                                    $Prop{$1} = $2;
+                                }
+                            }
+                        }
+                        
+                        writeFile($To."/probe.info", Data::Dumper::Dumper(\%Prop));
+                        $Imported = $P;
+                    }
+                    else {
+                        $IndexInfo->{"SkipProbes"}{$P} = 1;
+                    }
+                }
             }
-            else {
-                $IndexInfo->{"SkipProbes"}{$P} = 1;
+        }
+    }
+    else
+    {
+        my @Paths = ();
+        if(-d $PROBE_DIR)
+        {
+            foreach my $P (listDir($PROBE_DIR)) {
+                push(@Paths, $PROBE_DIR."/".$P);
+            }
+        }
+        
+        my $OldProbes = getOldProbeDir();
+        if($OldProbes and -d $OldProbes)
+        { # ROSA: changed probe place in 1.3
+            foreach my $P (listDir($OldProbes)) {
+                push(@Paths, $OldProbes."/".$P);
+            }
+        }
+        
+        foreach my $D (@Paths)
+        {
+            my $P = basename($D);
+            if($P eq "LATEST" or not -d $D or not listDir($D)) {
+                next;
+            }
+            
+            if(defined $IndexInfo->{"SkipProbes"}{$P}) {
+                next;
+            }
+            
+            my $To = $Dir."/".$P;
+            if(not -e $To or not -e "$To/logs")
+            {
+                if(downloadProbe($P, $To)!=-1)
+                {
+                    my $TmpDir = $TMP_DIR."/hw.info";
+                    system("tar -xf $D/* -C $TMP_DIR");
+                    
+                    my %Prop = ();
+                    foreach my $Line (split(/\n/, readFile($TmpDir."/host")))
+                    {
+                        if($Line=~/(\w+):(.*)/) {
+                            $Prop{$1} = $2;
+                        }
+                    }
+                    
+                    my @DStat = stat($TmpDir);
+                    $Prop{"date"} = $DStat[9]; # last modify time
+                    $Prop{"hwaddr"} = uc($Prop{"hwaddr"});
+                    writeFile($To."/probe.info", Data::Dumper::Dumper(\%Prop));
+                    $Imported = $P;
+                    setPublic($To, "-R");
+                    rmtree($TmpDir);
+                }
+                else {
+                    $IndexInfo->{"SkipProbes"}{$P} = 1;
+                }
             }
         }
     }
     
     writeFile($Dir."/index.info", Data::Dumper::Dumper($IndexInfo));
-    setPublic($Dir."/index.info");
+    if(not $Opt{"Group"}) {
+        setPublic($Dir."/index.info");
+    }
     
     if(not $Imported) {
         print "No probes to import\n";
@@ -12339,8 +12620,11 @@ sub importProbes($)
         $LIST .= "<h2>$Title</h2>\n";
         $LIST .= "<table class='tbl highlight local_timeline'>\n";
         $LIST .= "<tr>\n";
-        $LIST .= "<th>Probe</th><th>Arch</th><th>System</th><th>Date</th><th>Desc</th>\n";
-        $LIST .= "</tr>\n";
+        $LIST .= "<th>Probe</th><th>Arch</th><th>System</th><th>Date</th>";
+        if(not $Opt{"Group"}) {
+            $LIST .= "<th>Desc</th>";
+        }
+        $LIST .= "\n</tr>\n";
         foreach my $P (@Probes)
         {
             my $System = $Indexed{$HWaddr}{$P}->{"system"};
@@ -12367,9 +12651,12 @@ sub importProbes($)
             $LIST .= getDateStamp($Indexed{$HWaddr}{$P}->{"date"});
             $LIST .= "</td>\n";
             
-            $LIST .= "<td>\n";
-            $LIST .= $Indexed{$HWaddr}{$P}->{"id"};
-            $LIST .= "</td>\n";
+            if(not $Opt{"Group"})
+            {
+                $LIST .= "<td>\n";
+                $LIST .= $Indexed{$HWaddr}{$P}->{"id"};
+                $LIST .= "</td>\n";
+            }
             
             $LIST .= "</tr>\n";
         }
@@ -12384,7 +12671,10 @@ sub importProbes($)
     $INDEX=~s{(['"])(css|js|images)/}{$1$OneProbe/$2/}g;
 
     writeFile($Dir."/index.html", $INDEX);
-    setPublic($Dir."/index.html");
+    
+    if(not $Opt{"Group"}) {
+        setPublic($Dir."/index.html");
+    }
     
     print "Created index: $Dir/index.html\n";
 }
@@ -12692,7 +12982,7 @@ sub fixLogs($)
         }
     }
     
-    foreach my $L ("pstree")
+    foreach my $L ("pstree", "findmnt", "fdisk", "df")
     { # Support for HW Probe 1.4
         if(-f "$Dir/$L"
         and -s "$Dir/$L" < $EMPTY_LOG_SIZE)
@@ -12952,6 +13242,12 @@ sub fixDE()
     return $DE;
 }
 
+sub initDataDir($)
+{
+    my $Dir = $_[0];
+    return ($Dir, $Dir."/logs", $Dir."/tests");
+}
+
 sub scenario()
 {
     if($Opt{"Help"})
@@ -13174,6 +13470,10 @@ sub scenario()
         $Opt{"Logs"} = 0;
     }
     
+    if($Opt{"Probe"} and ($Opt{"Upload"} or $Opt{"Save"})) {
+        ($DATA_DIR, $LOG_DIR, $TEST_DIR) = initDataDir($TMP_PROBE);
+    }
+    
     if($Opt{"Check"})
     {
         $Opt{"CheckGraphics"} = 1;
@@ -13354,7 +13654,7 @@ sub scenario()
     {
         makeProbe();
         
-        if(not $Opt{"Upload"} and not $Opt{"Show"} and not $Opt{"ShowDevices"}) {
+        if(not $Opt{"Upload"} and not $Opt{"Save"} and not $Opt{"Show"} and not $Opt{"ShowDevices"}) {
             print "Local probe path: $DATA_DIR\n";
         }
     }
@@ -13416,6 +13716,17 @@ sub scenario()
                         }
                     }
                 }
+            }
+        }
+        
+        # Support for MX
+        if($Distr=~/\Adebian/)
+        {
+            my $Debs = readFile("$FixProbe_Logs/debs");
+            if($Debs=~/(mx-system|ddm-mx) (\d+)/)
+            {
+                $Distr = "mx-".$2;
+                $Rel = $Distr;
             }
         }
         
@@ -13495,15 +13806,8 @@ sub scenario()
         {
             if(-s "$FixProbe_Logs/acpidump")
             {
-                if(decodeACPI("$FixProbe_Logs/acpidump", "$FixProbe_Logs/acpidump_decoded")) {
-                    unlink("$FixProbe_Logs/acpidump");
-                }
+                decodeACPI("$FixProbe_Logs/acpidump", "$FixProbe_Logs/acpidump_decoded");
             }
-        }
-
-        if(-s "$FixProbe_Logs/acpidump"
-        and -s "$FixProbe_Logs/acpidump_decoded") {
-            unlink("$FixProbe_Logs/acpidump");
         }
         
         if($USE_JSON_XS) {
@@ -13577,8 +13881,10 @@ sub scenario()
         uploadData();
         cleanData();
     }
-    elsif($Opt{"Save"}) {
+    elsif($Opt{"Save"})
+    {
         saveProbe($Opt{"Save"});
+        cleanData();
     }
     
     if($Opt{"GenerateGroup"})
@@ -13643,7 +13949,7 @@ sub scenario()
     
     if($Opt{"ImportProbes"})
     {
-        if(not $Admin)
+        if(not $Admin and not $Opt{"Group"})
         {
             printMsg("ERROR", "you should run as root (sudo or su)");
             exitStatus(1);
